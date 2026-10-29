@@ -2,7 +2,7 @@
 """开播前一键自检 —— 把所有「能不能开播」的条件逐条验一遍。
 
 用法：
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools\\prelive_check.py
+    python tools\\prelive_check.py
 
 设计原则：
     每一条都给「通过 / 警告 / 失败」，警告不阻止开播但要知道，

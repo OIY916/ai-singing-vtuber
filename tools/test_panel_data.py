@@ -2,7 +2,7 @@
 """往运行中的直播服务注入测试数据，验证面板 UI（开播前自测用）。
 
 用法：
-    E:\qq-bot\astrbot-venv\Scripts\python.exe tools/test_panel_data.py
+    python tools/test_panel_data.py
 
 为什么用脚本而不是 curl：
     Windows 的 shell 会把中文参数按 GBK 转码，发给服务端后 JSON 解析失败，

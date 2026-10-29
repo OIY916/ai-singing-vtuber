@@ -11,7 +11,7 @@
     3. 重启后自动跑一次自检
 
 用法：
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools/restart_when_idle.py
+    python tools/restart_when_idle.py
     ... tools/restart_when_idle.py --max-wait 900   最多等 15 分钟
 """
 import argparse

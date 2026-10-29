@@ -8,7 +8,7 @@
    就说明这首结束了，立刻重启。
 
 用法：
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools\\restart_after_song.py
+    python tools\\restart_after_song.py
     ... --song "潮汐 - 苏也莉"   指定歌名（默认取当前正在播的那首）
     ... --dry-run               只看不重启
 """

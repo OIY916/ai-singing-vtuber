@@ -6,12 +6,12 @@
 直播时表现为「歌放不出来、频谱不动」。
 
 用法：
-    E:\qq-bot\astrbot-venv\Scripts\python.exe tools/diag_audio.py
+    python tools/diag_audio.py
 """
 import sys
 import time
 
-sys.path.insert(0, r"E:\qq-bot\stream")
+sys.path.insert(0, _os.path.join(PROJ_ROOT, "stream"))
 sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np

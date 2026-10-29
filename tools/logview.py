@@ -7,7 +7,7 @@
 
 用法：
     # 看最近发生的事（点歌/翻唱/播放/礼物）
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools/logview.py
+    python tools/logview.py
 
     # 只看今天的
     ... tools/logview.py --today

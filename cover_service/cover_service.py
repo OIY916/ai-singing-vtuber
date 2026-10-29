@@ -128,6 +128,25 @@ def list_models():
     return sorted([f for f in os.listdir(d) if f.endswith(".pth")])
 
 
+def _resolve_model(model: str) -> str:
+    """把「用户没指定音色」的情况兜住：自动用 weights 里的第一个。
+
+    ⚠️ 本仓库不附带任何 .pth 音色模型（版权原因），所以配置留空是常态。
+       这里自动挑一个并打印出来，让用户知道实际用的是哪个。
+    """
+    model = (model or "").strip()
+    if model:
+        return model
+    ms = list_models()
+    if not ms:
+        raise RuntimeError(
+            "RVC 里没有任何音色模型：请把 .pth 放进 "
+            + os.path.join(RVC_ROOT, "assets", "weights")
+            + "（或在 stream/config.json 的 sing_model / tts_model 指定文件名）")
+    print(f"[cover] 未指定音色，自动使用 {ms[0]}（共 {len(ms)} 个可用）")
+    return ms[0]
+
+
 def _ensure_playable(src):
     """把 NCM(网易云加密) 等格式转成可读音频，返回可用路径"""
     low = src.lower()
@@ -537,7 +556,8 @@ def _mix(vocal_wav, ins_wav, out_audio, workdir):
         pass
 
 
-def do_cover(src_audio, model="kikiV1.pth", f0up_key=0, index_rate=0.0, sep_model="HP2_all_vocals"):
+def do_cover(src_audio, model="", f0up_key=0, index_rate=0.0, sep_model="HP2_all_vocals"):
+    model = _resolve_model(model)
     """核心翻唱流程，返回输出 mp3 路径"""
     job = str(uuid.uuid4())[:8]
     jobdir = os.path.join(WORK_DIR, job)
@@ -747,7 +767,7 @@ async def cache_warm(keywords: str = Form(...), model: str = Form(""),
     import asyncio
     # 模型由主服务传入（config.sing_model）；预热时没传就用说话音色兜底，
     # 保证不会因为空字符串挑到错误的缓存 key
-    m = model or DEFAULT_SPEAK_MODEL
+    m = _resolve_model(model)
     kws = [k.strip() for k in re.split(r"[,，\n]+", keywords) if k.strip()]
     results = []
     for kw in kws[:30]:      # 最多 30 首，别一次跑太久
@@ -793,7 +813,7 @@ def cache_clear():
 @app.post("/cover")
 async def cover(
     file: UploadFile = File(...),
-    model: str = Form("kikiV1.pth"),
+    model: str = Form(""),   # 留空 = 自动选第一个音色
     f0up_key: int = Form(0),
     index_rate: float = Form(0.0),
 ):
@@ -1063,7 +1083,78 @@ def _load_mimo_key() -> str:
 
 MIMO_KEY = _load_mimo_key()
 MIMO_URL = "https://api.xiaomimimo.com/v1/chat/completions"
-DEFAULT_SPEAK_MODEL = "youzhanv2-xi.pth"
+
+
+def _load_tts_cfg() -> dict:
+    """TTS 提供方配置 —— 不绑定任何厂商。
+
+    优先级：环境变量 TTS_* > cover_service/local_secrets.json（未跟踪）> 自动推断
+
+    provider 取值：
+      "openai" —— 任意 OpenAI 兼容的 /audio/speech
+                  （OpenAI、硅基流动、各类中转服务都支持；
+                   换厂商只改 tts_base / tts_model / tts_key）
+      "mimo"   —— MiMo 的 chat/completions + audio 输出（原型机用的这个）
+
+    自动推断：配了 base+key 走 openai，否则用本地 mimo_key 走 mimo。
+    """
+    cfg = {"provider": "", "base": "", "key": "", "model": "", "voice": "", "format": "wav"}
+    for name in ("local_secrets.json", "secrets.json"):
+        p = os.path.join(BASE_DIR, name)
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            for k in ("tts_provider", "tts_base", "tts_key", "tts_model",
+                      "tts_voice", "tts_format"):
+                if d.get(k):
+                    cfg[k.replace("tts_", "")] = str(d[k])
+        except Exception as e:
+            print(f"[cover] 读取 {name} 失败（忽略）: {e}")
+        break
+    for k in ("provider", "base", "key", "model", "voice", "format"):
+        v = os.environ.get("TTS_" + k.upper())
+        if v:
+            cfg[k] = v
+    if not cfg["provider"]:
+        cfg["provider"] = "openai" if (cfg["base"] and cfg["key"]) else "mimo"
+    return cfg
+
+
+TTS_CFG = _load_tts_cfg()
+
+
+def _openai_tts(text: str, voice: str = "") -> bytes:
+    """OpenAI 兼容的 /audio/speech，返回音频字节。"""
+    base = (TTS_CFG.get("base") or "").rstrip("/")
+    if not base or not TTS_CFG.get("key"):
+        raise RuntimeError(
+            "没有配置 TTS：请在 cover_service/local_secrets.json 里填 "
+            "tts_base / tts_key / tts_model（或设环境变量 TTS_BASE / TTS_KEY / TTS_MODEL），"
+            "指向任意 OpenAI 兼容的 /audio/speech 服务")
+    body = {
+        "model": TTS_CFG.get("model") or "tts-1",
+        "input": text,
+        "voice": voice or TTS_CFG.get("voice") or "alloy",
+        "response_format": TTS_CFG.get("format") or "wav",
+    }
+    req = urllib.request.Request(
+        base + "/audio/speech",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Authorization": "Bearer " + TTS_CFG["key"],
+                 "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return resp.read()
+
+
+def _tts_bytes(text: str, voice: str = "") -> bytes:
+    """按配置选择 TTS 实现，返回音频字节。"""
+    if (TTS_CFG.get("provider") or "").lower() == "mimo":
+        return _mimo_tts(text, voice or TTS_CFG.get("voice") or DEFAULT_TTS_VOICE)
+    return _openai_tts(text, voice)
+DEFAULT_SPEAK_MODEL = ""   # 空 = 自动使用 RVC_Core/assets/weights 里的第一个音色
 DEFAULT_TTS_VOICE = "冰糖"
 
 
@@ -1138,14 +1229,16 @@ def _rvc_convert(input_wav: str, model: str, f0up_key: int, output_wav: str):
 
 
 def _do_speak(text: str, model: str, f0up_key: int, voice: str) -> str:
-    """文本 -> MiMo TTS -> RVC -> mp3，返回路径"""
+    """文本 -> TTS（可配置）-> RVC -> mp3，返回路径"""
+    model = _resolve_model(model)
     job = str(uuid.uuid4())[:8]
     jobdir = os.path.join(WORK_DIR, job)
     os.makedirs(jobdir, exist_ok=True)
     try:
-        raw_wav = os.path.join(jobdir, "tts.wav")
+        ext = (TTS_CFG.get("format") or "wav").lower()
+        raw_wav = os.path.join(jobdir, "tts." + ext)
         with open(raw_wav, "wb") as f:
-            f.write(_mimo_tts(text, voice))
+            f.write(_tts_bytes(text, voice))
         conv_wav = os.path.join(jobdir, "converted.wav")
         _rvc_convert(raw_wav, model, f0up_key, conv_wav)
         out_mp3 = os.path.join(OUT_DIR, f"speak_{job}.mp3")
@@ -1188,7 +1281,7 @@ async def speak(
 @app.post("/cover_path")
 def cover_path(
     path: str = Form(...),
-    model: str = Form("kikiV1.pth"),
+    model: str = Form(""),   # 留空 = 自动选第一个音色
     f0up_key: int = Form(0),
     index_rate: float = Form(0.0),
 ):

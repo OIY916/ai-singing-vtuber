@@ -11,7 +11,7 @@
 
 启动：
     直接双击 tools/直播控制台.pyw（无黑窗）
-    或  E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools\\直播控制台.py
+    或  python tools\\直播控制台.py
 
 ⚠️ 这是**独立进程**，只管发 HTTP 请求给主服务，
    不影响直播、不占 GPU、崩溃了也不影响主服务。

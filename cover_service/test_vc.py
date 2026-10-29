@@ -5,7 +5,7 @@ import sys
 
 _args = sys.argv[1:]
 INPUT = _args[0] if len(_args) > 0 else r"E:\qq-bot\_research\mimo_sing_test.wav"
-MODEL = _args[1] if len(_args) > 1 else "kikiV1.pth"
+MODEL = _args[1] if len(_args) > 1 else ""   # 留空 = 用 weights 里第一个
 OUTPUT = _args[2] if len(_args) > 2 else r"E:\qq-bot\cover_service\test_out.wav"
 F0UP = int(_args[3]) if len(_args) > 3 else 0
 F0METHOD = _args[4] if len(_args) > 4 else "rmvpe"

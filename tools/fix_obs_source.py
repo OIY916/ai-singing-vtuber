@@ -7,7 +7,7 @@
     OBS 的画布是 1920×1080，源也应该是 1920×1080 才能铺满。
 
 用法：
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools\\fix_obs_source.py
+    python tools\\fix_obs_source.py
 """
 import json
 import sys

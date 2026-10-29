@@ -2,7 +2,7 @@
 """抖音 AI 唱歌主播 —— 主服务
 
 链路：
-  抖音弹幕(1088) ──► 事件队列 ──► LLM(deepseek/mimo) ──► RVC /speak ──► 混音器 ──► VB-Cable
+  抖音弹幕(1088) ──► 事件队列 ──► LLM(任意 OpenAI 兼容接口) ──► RVC /speak ──► 混音器 ──► VB-Cable
                         │                                                  │
                         └──► 点歌(cover_service /sing) ───────────────────┘
                                                                            │
@@ -51,11 +51,15 @@ CFG = {
     "douyin_ws": "ws://127.0.0.1:1088/ws",   # douyinLive 服务
     "room_id": "",                            # 抖音直播间号（web_rid）
     "cover_api": "http://127.0.0.1:8899",     # RVC 翻唱服务
-    "llm_base": "https://api.deepseek.com",
+    # LLM：任意 OpenAI 兼容服务（OpenAI / DeepSeek / 通义 / 中转 …），
+    #     只需要 base + key + model 三个值，代码里不绑定任何厂商。
+    "llm_base": "",
     "llm_key": "",
-    "llm_model": "deepseek-chat",
-    "tts_model": "guanguanV1.pth",            # 说话用的音色
-    "sing_model": "nikou48K1999.pth",         # 唱歌用的音色
+    "llm_model": "",
+    # RVC 音色：留空 = 自动使用 RVC_Core/assets/weights 里的第一个。
+    # 本仓库不附带音色模型（版权原因），请自备 .pth。
+    "tts_model": "",                          # 说话用的音色
+    "sing_model": "",                         # 唱歌用的音色
     "persona": "你是一位活泼可爱的虚拟主播，正在直播唱歌。说话口语化、简短，不超过40字。",
     "max_chars": 40,
     "reply_prob": 0.35,                       # 弹幕回复概率
@@ -72,19 +76,17 @@ def load_cfg():
                 CFG.update(json.load(f))
         except Exception as e:
             print("配置读取失败:", e)
-    # LLM key 从 AstrBot 配置里借
-    if not CFG.get("llm_key"):
-        try:
-            p = os.path.join(os.path.dirname(BASE), "data", "cmd_config.json")
-            raw = open(p, "rb").read()
-            cfg = json.loads(raw.decode("utf-8-sig"))
-            for s in cfg.get("provider_sources", []):
-                if s.get("id") == "deepseek":
-                    CFG["llm_key"] = s["key"][0]
-                    CFG["llm_base"] = s.get("api_base", "https://api.deepseek.com")
-                    break
-        except Exception as e:
-            print("读取 LLM key 失败:", e)
+    # ---- LLM 接入（任意 OpenAI 兼容接口，不绑定厂商）----
+    # 优先级：环境变量 > stream/config.json > 兼容旧部署
+    for _env, _key in (("LLM_API_KEY", "llm_key"), ("LLM_BASE", "llm_base"),
+                       ("LLM_MODEL", "llm_model")):
+        _v = os.environ.get(_env)
+        if _v:
+            CFG[_key] = _v
+    if not CFG.get("llm_key") or not CFG.get("llm_base"):
+        print("[LLM] 未配置大模型：请在 stream/config.json 填 llm_base / llm_key / llm_model，"
+              "或设置环境变量 LLM_BASE / LLM_API_KEY / LLM_MODEL（任意 OpenAI 兼容接口）。"
+              "未配置时弹幕不会得到回复，点歌/翻唱不受影响。")
 
 
 # ---------- 全局状态 ----------

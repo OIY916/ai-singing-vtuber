@@ -3,7 +3,7 @@
 抖音登录器（持久化 profile）
 - 弹出可见浏览器，用户手动扫码/手机号登录
 - 登录成功后自动导出 Cookie 到 douyin_cookie.txt
-- profile 永久保存在 E:\qq-bot\douyin_profile，之后 cookie 可复用
+- profile 永久保存在 <项目根>\douyin_profile，之后 cookie 可复用
 
 用法：
     python douyin_login_tool.py            # 打开浏览器等登录
@@ -18,8 +18,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from playwright.sync_api import sync_playwright
 
-PROFILE_DIR = os.environ.get("DOUYIN_PROFILE_DIR", r"E:\qq-bot\douyin_profile")
-COOKIE_OUT = os.environ.get("DOUYIN_COOKIE_OUT", r"E:\qq-bot\tools_raw\douyin_cookie.txt")
+PROFILE_DIR = os.environ.get("DOUYIN_PROFILE_DIR", _os.path.join(PROJ_ROOT, "douyin_profile"))
+COOKIE_OUT = os.environ.get("DOUYIN_COOKIE_OUT", _os.path.join(PROJ_ROOT, "tools_raw", "douyin_cookie.txt"))
 CHROME = os.environ.get("PLAYWRIGHT_CHROME", r"C:\Users\Administrator\AppData\Local\ms-playwright\chromium-1228\chrome-win64\chrome.exe")
 
 # 抖音 cookie 里这几个是关键字段

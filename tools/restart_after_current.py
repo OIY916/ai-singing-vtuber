@@ -8,7 +8,7 @@
       （一首歌刚结束、下一首还没开始的空档，中断最自然）
 
 用法：
-    E:\\qq-bot\\astrbot-venv\\Scripts\\python.exe tools\\restart_after_current.py
+    python tools\\restart_after_current.py
     ... --dry-run     只看时机，不真重启
 """
 import argparse
