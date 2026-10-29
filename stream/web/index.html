@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大肥鱼 · 控制台</title>
+<style>
+  :root{--bd:#2b3a56;--bg:#0e1622;--fg:#dbe7f7;--ac:#6fa8ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 "Microsoft YaHei",monospace;padding:16px}
+  h1{font-size:17px;margin:0 0 12px;color:var(--ac)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:#152233;border:1px solid var(--bd);border-radius:10px;padding:12px}
+  .k{color:#84a3c8;font-size:12px}
+  .v{font-size:20px;font-weight:700;color:#fff}
+  #log{height:300px;overflow:auto;background:#0b131d;border-radius:8px;
+       padding:10px;font:12px/1.7 monospace;border:1px solid var(--bd)}
+  .l-info{color:#8fd0ff}.l-warn{color:#ffcf6b}.l-error{color:#ff7b7b}
+  .row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+  a.btn,button{background:#1e3450;color:#cfe4ff;border:1px solid #3a5b85;
+    padding:7px 13px;border-radius:8px;text-decoration:none;font-size:13px;cursor:pointer}
+  a.btn:hover,button:hover{background:#28486d}
+  #ev{height:180px;overflow:auto;font:12px/1.7 monospace;color:#a8c6e8}
+</style>
+</head>
+<body>
+<h1>🐋 大肥鱼直播控制台</h1>
+
+<div class="grid">
+  <div class="card"><div class="k">当前状态</div><div class="v" id="mode">-</div></div>
+  <div class="card"><div class="k">直播间</div><div class="v" id="room">-</div></div>
+  <div class="card"><div class="k">收到事件</div><div class="v" id="ev-count">0</div></div>
+  <div class="card"><div class="k">已回复 / 已唱歌</div><div class="v"><span id="rep">0</span> / <span id="song">0</span></div></div>
+</div>
+
+<div class="row">
+  <a class="btn" href="/avatar" target="_blank">皮套页（OBS 浏览器源）</a>
+  <a class="btn" href="/overlay" target="_blank">纯字幕（OBS 浏览器源）</a>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="k">运行日志</div>
+  <div id="log"></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="k">最近事件</div>
+  <div id="ev"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, retry = 0;
+
+function log(level, msg){
+  const d = document.createElement('div');
+  d.className = 'l-' + (level || 'info');
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  $('log').appendChild(d);
+  $('log').scrollTop = $('log').scrollHeight;
+  while ($('log').children.length > 400) $('log').firstChild.remove();
+}
+function evline(t){
+  const d = document.createElement('div');
+  d.textContent = t;
+  $('ev').appendChild(d);
+  if ($('ev').children.length > 60) $('ev').firstChild.remove();
+}
+
+function connect(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { retry = 0; log('info','WebSocket 已连接'); };
+  ws.onclose = () => { log('warn','连接断开，重连中…'); setTimeout(connect, Math.min(5000, 500*++retry)); };
+  ws.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.kind === 'log') log(m.level, m.msg);
+    else if (m.kind === 'event') {
+      evline(`${m.type} ${m.name}${m.text ? ' : '+m.text : ''}`);
+      const c = +$('ev-count').textContent + 1; $('ev-count').textContent = c;
+    }
+    else if (m.kind === 'reply') log('info', `回复 ${m.name}: ${m.text}`);
+    else if (m.kind === 'motion') $('mode').textContent = m.state;
+    else if (m.kind === 'hello') { $('ev-count').textContent = m.stats.events; }
+  };
+}
+
+async function poll(){
+  try {
+    const d = await (await fetch('/api/state')).json();
+    $('mode').textContent = d.mode;
+    $('room').textContent = d.room || '未配置';
+    $('rep').textContent = d.stats.replies;
+    $('song').textContent = d.stats.songs;
+  } catch {}
+}
+
+connect();
+setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>

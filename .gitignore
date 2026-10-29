@@ -1,0 +1,55 @@
+# ===== 运行时产物 =====
+logs/
+*.log
+browser-screenshots/
+stream/queue_state.json
+mc/bot/brain_state.json
+tmp/
+backups/
+
+# ===== 真实配置（含密钥 / 房间号 / 登录态，只提交 .example）=====
+stream/config.json
+cover_service/netease_cookie.json
+mc/server/server.properties
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+astrbot-venv/
+
+# ===== Node =====
+node_modules/
+
+# ===== 媒体与大文件（几十 GB，不进仓库）=====
+data/
+emo/
+cover_service/songs/
+cover_service/output/
+cover_service/cache/
+cover_service/work/
+cover_service/tts_temp/
+cover_service/voice_call_temp/
+cover_service/*.mp3
+cover_service/*.wav
+stream/refs/
+mc/server/world/
+mc/server/world_*/
+mc/server/*.jar
+mc/server/libraries/
+mc/server/versions/
+avatar/clips/
+avatar/crawler/
+avatar/jimeng/
+
+# ===== 抓取 / 登录态目录 =====
+douyin_profile/
+netease_profile/
+_research/
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini

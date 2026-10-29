@@ -1,0 +1,27 @@
+# 直播主服务 + 控制台依赖（Python 3.10）
+# 注意：RVC 翻唱服务跑在 RVC 自带的 Python 环境里（自带 torch 等），不装这里
+aiohttp>=3.9
+websockets>=12
+numpy>=1.24
+scipy>=1.10
+sounddevice>=0.4.6
+Pillow>=10
+mutagen>=1.47
+psutil>=5.9
+fastapi>=0.110
+uvicorn>=0.29
+python-dotenv>=1.0
+requests>=2.31
+httpx>=0.27
+pycryptodome>=3.20
+cryptography>=42
+curl_cffi>=0.7
+qrcode>=7.4
+
+# 仅 Windows
+comtypes>=1.4; sys_platform == "win32"
+pywin32>=306; sys_platform == "win32"
+
+# 可选：抖音登录态抓取 / OBS 自动控制
+playwright>=1.44
+obsws-python>=1.7

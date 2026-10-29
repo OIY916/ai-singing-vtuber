@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大肥鱼 · 直播间</title>
+<!--
+  大肥鱼直播间场景页（OBS 浏览器源，设计尺寸 1920×1080）
+
+  设计参考：抖音同行的「点歌直播间」布局
+    · 顶部：头像 + 标题 + 右侧三个数据胶囊（在线 / 今日点歌 / 队列）
+    · 左栏：实时数据、最近礼物、今日收益
+    · 中间：皮套立绘 + 左右漂浮气泡 + 频谱条（气泡是全部文字的统一出口）
+    · 右栏：正在播放（歌名/点歌人/进度条）、接下来·点歌队列
+    · 底部：弹幕流 + 点歌提示 + AI 生成声明
+
+  数据来源：/ws 的 panel 快照（10Hz）、reply 气泡、feed 弹幕流、gift_fx 礼物特效。
+  没有外部依赖（不引 CDN），OBS 断网也能正常渲染。
+-->
+<style>
+  :root{
+    --ink:#eaf3ff;
+    --dim:#93b0d6;
+    --dim2:#6c8cb5;
+    --line:rgba(120,180,255,.16);
+    --glass:rgba(20,42,78,.52);
+    --glass2:rgba(14,32,62,.62);
+    --accent:#5cc8ff;
+    --accent2:#8f7bff;
+    --gold:#ffc95c;
+    --pink:#ff7fb5;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    color:var(--ink);
+  }
+
+  /* ---------- 舞台：固定 1920×1080 设计稿，按视口等比缩放 ---------- */
+  #stage{
+    position:fixed;left:0;top:0;width:1920px;height:1080px;
+    transform-origin:top left;
+    overflow:hidden;
+  }
+
+  /* ---------- 背景 ---------- */
+  #bg{position:absolute;inset:0;background:
+      radial-gradient(1200px 760px at 18% 8%, #1b3f78 0%, rgba(16,45,90,0) 62%),
+      radial-gradient(1000px 700px at 88% 18%, #143a66 0%, rgba(12,36,70,0) 60%),
+      radial-gradient(900px 620px at 50% 108%, #0d2a52 0%, rgba(8,22,44,0) 64%),
+      linear-gradient(160deg,#081428 0%,#0a1d38 42%,#081c33 70%,#061225 100%)}
+  /* 细网格，科技感 */
+  #grid{position:absolute;inset:0;opacity:.35;
+      background-image:
+        linear-gradient(rgba(120,180,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120,180,255,.05) 1px, transparent 1px);
+      background-size:64px 64px;
+      mask-image:radial-gradient(1100px 700px at 50% 45%, #000 0%, transparent 78%);
+      -webkit-mask-image:radial-gradient(1100px 700px at 50% 45%, #000 0%, transparent 78%)}
+  /* 漂浮光球 */
+  .orb{position:absolute;border-radius:50%;filter:blur(46px);opacity:.5;pointer-events:none}
+  #o1{width:420px;height:420px;left:-90px;top:120px;background:rgba(66,150,255,.45);animation:drift 17s ease-in-out infinite}
+  #o2{width:360px;height:360px;right:-70px;top:60px;background:rgba(120,110,255,.38);animation:drift 21s ease-in-out infinite reverse}
+  #o3{width:520px;height:520px;left:44%;bottom:-220px;background:rgba(46,190,230,.28);animation:drift 25s ease-in-out infinite}
+  @keyframes drift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(28px,-34px,0)}}
+  /* 顶部柔光 */
+  #topglow{position:absolute;left:0;right:0;top:0;height:220px;
+      background:linear-gradient(180deg, rgba(90,170,255,.16), rgba(90,170,255,0))}
+
+  /* ---------- 通用卡片 ---------- */
+  .card{
+    position:absolute;border-radius:20px;
+    background:linear-gradient(180deg, var(--glass), var(--glass2));
+    border:1px solid var(--line);
+    box-shadow:0 18px 44px rgba(2,10,26,.38), inset 0 1px 0 rgba(180,220,255,.10);
+    backdrop-filter:blur(14px);
+  }
+  .card-h{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;
+      letter-spacing:.04em;color:#cfe4ff;opacity:.92}
+  .card-h .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+      box-shadow:0 0 10px var(--accent)}
+  .muted{color:var(--dim2)}
+
+  /* ================= 顶栏 ================= */
+  #head{position:absolute;left:40px;right:40px;top:26px;height:86px;display:flex;align-items:center}
+  #logo{
+    position:relative;width:74px;height:74px;border-radius:50%;overflow:hidden;flex:none;
+    border:2px solid rgba(120,200,255,.55);
+    box-shadow:0 0 0 5px rgba(70,150,255,.13), 0 10px 26px rgba(0,20,50,.5);
+    background:#0d2344;
+  }
+  #logo img{width:100%;height:100%;object-fit:cover;object-position:50% 16%}
+  #ttl{margin-left:20px;display:flex;flex-direction:column;gap:7px}
+  #tname{font-size:34px;font-weight:800;letter-spacing:.02em;
+      background:linear-gradient(180deg,#ffffff,#bcdcff 70%);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+      text-shadow:0 4px 24px rgba(90,170,255,.25)}
+  #tsub{display:flex;align-items:center;gap:10px;font-size:16px;color:var(--dim)}
+  #live-dot{width:9px;height:9px;border-radius:50%;background:#ff5d6c;
+      box-shadow:0 0 12px rgba(255,93,108,.9);animation:pulse 1.8s ease-in-out infinite}
+  #live-dot.off{background:#6b829f;box-shadow:none;animation:none}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+  #tagline{font-size:13px;color:var(--dim2);letter-spacing:.16em}
+
+  /* 右侧数据胶囊 */
+  #pills{position:absolute;right:0;top:50%;transform:translateY(-50%);display:flex;gap:14px}
+  .pill{
+    min-width:132px;padding:13px 22px;border-radius:16px;text-align:center;
+    background:linear-gradient(180deg, rgba(26,54,96,.72), rgba(14,34,64,.72));
+    border:1px solid var(--line);
+    box-shadow:inset 0 1px 0 rgba(180,220,255,.10), 0 10px 26px rgba(2,10,26,.35);
+  }
+  .pill .k{font-size:13px;color:var(--dim2);letter-spacing:.08em}
+  .pill .v{font-size:27px;font-weight:800;color:#fff;line-height:1.18;
+      font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(92,200,255,.35)}
+  .pill.hi .v{color:var(--gold);text-shadow:0 0 20px rgba(255,201,92,.45)}
+
+  /* ================= 左栏 ================= */
+  #left{position:absolute;left:40px;top:132px;width:288px;height:636px;
+        display:flex;flex-direction:column;gap:12px}
+  .lcard{position:relative;border-radius:18px;padding:11px 16px;flex:none;
+    background:linear-gradient(180deg, rgba(20,44,80,.60), rgba(12,30,58,.66));
+    border:1px solid var(--line);
+    box-shadow:0 14px 34px rgba(2,10,26,.32), inset 0 1px 0 rgba(180,220,255,.08)}
+  .lcard .t{display:flex;align-items:center;gap:8px;font-size:14px;color:#bcd8f7;
+    letter-spacing:.06em;font-weight:700;margin-bottom:8px}
+  .lcard .t i{width:6px;height:6px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 9px var(--accent);font-style:normal}
+
+  /* 实时数据 */
+  .statrow{display:flex;align-items:baseline;justify-content:space-between;padding:3px 0}
+  .statrow .k{font-size:14px;color:var(--dim2)}
+  .statrow .v{font-size:21px;font-weight:800;color:#eaf6ff;font-variant-numeric:tabular-nums}
+  .statrow .v.big{font-size:33px;
+    background:linear-gradient(180deg,#ffffff,#8fd8ff);-webkit-background-clip:text;
+    background-clip:text;color:transparent}
+  .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:6px 0}
+
+  /* 礼物 chips */
+  #gifts{display:flex;flex-wrap:wrap;gap:7px;min-height:32px;max-height:78px;overflow:hidden}
+  .gchip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:10px;
+    font-size:13px;color:#ffe3b0;
+    background:rgba(255,190,80,.12);border:1px solid rgba(255,190,80,.28);
+    animation:chipin .45s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes chipin{from{opacity:0;transform:translateY(8px) scale(.9)}to{opacity:1;transform:none}}
+  .empty{font-size:14px;color:var(--dim2);opacity:.8;line-height:1.5}
+
+  /* 收益 */
+  #income{display:flex;align-items:baseline;gap:6px}
+  #income .cur{font-size:20px;color:var(--gold);font-weight:700}
+  #income .num{font-size:40px;font-weight:800;color:var(--gold);
+    font-variant-numeric:tabular-nums;text-shadow:0 0 26px rgba(255,201,92,.42)}
+  #income .unit{font-size:13px;color:var(--dim2);margin-left:2px}
+  #income-sub{font-size:13px;color:var(--dim2);margin-top:8px}
+
+  /* 主播卡片 */
+  #host{display:flex;align-items:center;gap:12px}
+  #host-img{width:56px;height:56px;border-radius:14px;object-fit:cover;
+    object-position:50% 12%;flex:none;
+    border:1px solid rgba(120,180,255,.35);background:#0d2344}
+  #host .col{display:flex;flex-direction:column;gap:4px;min-width:0}
+  #host .hn{font-size:18px;font-weight:800;color:#eaf5ff}
+  #host .hs{font-size:12px;color:var(--dim2);line-height:1.4}
+  #host-tip{margin-top:14px;font-size:13px;line-height:1.7;color:var(--dim);opacity:.9}
+
+  /* 怎么玩 */
+  #hintcard{flex:1;min-height:0;overflow:hidden}
+  #howto{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+  #howto .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:13px;line-height:1.35}
+  #howto .ht b{font-size:14px;font-weight:800;color:#9fd4ff;white-space:nowrap;
+    padding:4px 9px;border-radius:8px;background:rgba(90,180,255,.14);
+    border:1px solid rgba(120,190,255,.22)}
+  #howto .ht span{color:var(--dim2);text-align:right;flex:1;min-width:0}
+
+  /* ================= 中间舞台 ================= */
+  #center{position:absolute;left:352px;width:1056px;top:120px;height:656px}
+
+  /* 气泡：全部文字的统一出口。
+     ------------------------------------------------------------
+     2026-10-28 改版（用户需求）：
+       原来是「头顶一个气泡」，新消息会直接顶掉旧消息。人多的时候
+       观众根本来不及看完上一句 —— 字一直在闪，观感很乱。
+
+     现在：每条消息都是**独立的气泡**，左右交替出现，从皮套两侧
+           由下往上慢慢飘，飘到顶就淡出消失。像弹幕从聊天框里浮上去。
+
+     容量控制：每边最多 3 条（同时最多 6 条），超了让最老的一条
+               提前飘走，保证屏幕上不会糊成一片。
+
+     气泡贴在皮套两侧的空档里，不会盖住立绘，也不会压到左右两栏的数据卡：
+       中央区 #center 占 x 352~1408，皮套立绘占 x 718~1042，
+       左边空档 366~718、右边空档 1042~1394（各约 350px 宽）。
+  */
+  #bubbles{
+    position:absolute;inset:0;z-index:8;pointer-events:none;
+    /* ⚠️ overflow:hidden 是必须的：气泡往上飘会超出 #center 上边界，
+       没有它就会飘进顶栏标题区。同时顶部留一段渐隐，
+       飘到最上面是「化掉」而不是被硬生生切掉。 */
+    overflow:hidden;
+    mask-image:linear-gradient(180deg, transparent 0, #000 88px);
+    -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 88px);
+  }
+  /* 左右两条泳道：各自竖着排气泡，靠中间（皮套一侧）对齐。
+     这样一眼就能看出「话是从中间那个人嘴里出来的」，
+     而不是像贴在左右数据卡上的标签。 */
+  .blane{
+    position:absolute;top:0;bottom:0;width:372px;
+    display:flex;flex-direction:column;justify-content:flex-end;
+    align-items:flex-end;      /* 左栏：靠右对齐（贴着皮套） */
+    pointer-events:none;
+  }
+  #laneL{left:0;align-items:flex-end;padding-right:6px}
+  #laneR{right:0;align-items:flex-start;padding-left:6px}
+  .bub{
+    /* ⚠️ 用 margin-top 而不是 absolute 定位：让浏览器自己算纵向堆叠，
+       天然不会重叠 —— 不再需要 JS 去推算「该往上抬多少」。
+       动画仍然只改 transform，位置由 flex 布局给。 */
+    position:relative;flex:none;margin-top:12px;
+    max-width:340px;min-width:110px;
+    padding:12px 18px 13px;border-radius:20px;
+    background:linear-gradient(180deg, rgba(238,248,255,.97), rgba(205,228,255,.93));
+    color:#0f2140;
+    font-size:21px;font-weight:700;line-height:1.42;letter-spacing:.01em;
+    word-break:break-word;
+    box-shadow:0 16px 38px rgba(4,18,44,.44),
+               0 0 0 2px rgba(150,205,255,.5),
+               inset 0 2px 0 rgba(255,255,255,.92);
+    will-change:transform,opacity;
+    opacity:0;
+  }
+  /* 动画单独放在 .go 上：JS 要先量出这条气泡多高，才能算出它该飘多远。
+     量完再加 .go 起跑。
+
+     ⚠️ 必须是 linear（2026-10-28 踩过）：
+       JS 按「匀速上升」推算同侧气泡的间距，只要 CSS 用了缓动
+       （cubic-bezier），实际速度就会起步慢、中间快 —— 后面的气泡
+       会追上前面的，叠成一片。linear 让两边的假设一致，间距才是真的固定。 */
+  .bub.go{
+    animation:floatUp var(--dur,8000ms) linear forwards;
+  }
+  /* 左右两栏定位由 .blane 的 flex 负责，这里只管圆角朝向 */
+  .bub.L{border-bottom-right-radius:7px}
+  .bub.R{border-bottom-left-radius:7px}
+  .bub.L{box-shadow:0 16px 38px rgba(4,18,44,.44),
+                     0 0 0 2px rgba(120,200,255,.55),
+                     inset 0 2px 0 rgba(255,255,255,.92)}
+  .bub.R{box-shadow:0 16px 38px rgba(4,18,44,.44),
+                     0 0 0 2px rgba(150,140,255,.5),
+                     inset 0 2px 0 rgba(255,255,255,.92)}
+  .bub .who{
+    display:block;font-size:13px;font-weight:800;letter-spacing:.10em;
+    color:#2f6fb8;margin-bottom:5px;text-transform:uppercase;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
+  .bub.R .who{color:#6a4fd0}
+  .bub .who:empty{display:none}
+
+  /* 上升：从下往上慢慢飘，飘到顶部渐隐区刚好淡完。
+     ⚠️ 只用 transform + opacity（合成层动画），OBS 里长时间跑也不掉帧。 */
+  @keyframes floatUp{
+    0%  {opacity:0;transform:translate3d(0,0,0) scale(.94)}
+    6%  {opacity:1;transform:translate3d(0,-10px,0) scale(1)}
+    62% {opacity:1}
+    100%{opacity:0;transform:translate3d(var(--dx,0px),calc(-1 * var(--rise,500px)),0) scale(1)}
+  }
+
+  /* 皮套立绘：固定在中央区底部 */
+  #avatar-wrap{
+    position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:2;
+    height:470px;display:flex;align-items:flex-end;justify-content:center;
+  }
+  /* 背后光环 */
+  #halo{
+    position:absolute;left:50%;bottom:0;width:540px;height:480px;
+    transform:translateX(-50%);border-radius:50%;
+    background:radial-gradient(circle, rgba(92,180,255,.30) 0%, rgba(92,180,255,.10) 42%, rgba(92,180,255,0) 68%);
+    filter:blur(6px);
+    transition:opacity .4s ease, transform .4s ease;
+  }
+  #avatar{
+    position:relative;height:100%;width:auto;max-width:100%;object-fit:contain;
+    filter:drop-shadow(0 26px 44px rgba(0,14,40,.62));
+    animation:float 5.2s ease-in-out infinite;
+    transform-origin:50% 92%;
+  }
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+  /* ---------- 视频皮套（即梦生成，2026-10-28） ----------
+     三段循环视频：idle / speak / sing，透明背景 webm，各自常驻。
+
+     设计取舍：
+       · 视频里已经有呼吸/说话/唱歌动作，所以**去掉 CSS 的 float 浮动**
+         —— 否则视频自身的动作 + CSS 位移会叠加，看起来像抽搐。
+       · 三段同时播放，只靠 opacity 切换。切换零延迟、动作不会跳回起点。
+       · 静态图留在最下层当兜底：所有视频都加载失败时仍然有人。
+     视频尺寸 720×1280（9:16），显示成 470px 高的角色。 */
+  .avid{
+    position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+    /* 视频已裁掉空白（696×992，角色满框）。
+       ⚠️ 用 height:100% 会按 #avatar-wrap 的 470px 算 ——
+          但那是**内容框**高度，视频自身比例 696:992 会把宽度压小。
+          实测下来 470px 高只有 220px 宽，比静态图（216px）还小一点，
+          但角色本身比静态图的构图更"满"，所以观感反而更小。
+          这里直接用固定高度 530px 让角色接近原来的视觉大小。 */
+    height:530px;width:auto;
+    filter:drop-shadow(0 26px 44px rgba(0,14,40,.62));
+    opacity:0;transition:opacity .35s ease;
+    pointer-events:none;
+  }
+  .avid.on{opacity:1}
+  /* 视频接管后，静态图淡出（保留但不可见，避免闪黑） */
+  #avatar.vid-mode{opacity:0;transition:opacity .45s ease}
+
+  /* 唱歌时轻轻摆动 + 光环加强 */
+  body[data-state="sing"] #avatar{animation:sway 2.6s ease-in-out infinite}
+  body[data-state="sing"] #halo{
+    opacity:1;transform:translateX(-50%) scale(1.08);
+    background:radial-gradient(circle, rgba(150,120,255,.34) 0%, rgba(150,120,255,.10) 44%, rgba(150,120,255,0) 70%)}
+  body[data-state="speak"] #avatar{animation:float 3.1s ease-in-out infinite}
+  @keyframes sway{0%,100%{transform:translateY(0) rotate(-1.1deg)}50%{transform:translateY(-8px) rotate(1.1deg)}}
+
+  /* 状态徽章：贴在角色脚下 */
+  #status{
+    position:absolute;left:50%;bottom:66px;transform:translateX(-50%);z-index:5;
+    display:flex;align-items:center;gap:9px;padding:8px 18px;border-radius:999px;
+    font-size:15px;font-weight:700;letter-spacing:.08em;color:#d7ecff;white-space:nowrap;
+    background:rgba(12,32,62,.78);border:1px solid var(--line);
+    box-shadow:0 10px 26px rgba(2,10,26,.4);
+  }
+  #status .sdot{width:8px;height:8px;border-radius:50%;background:#5cc8ff;
+    box-shadow:0 0 12px #5cc8ff;animation:pulse 1.6s ease-in-out infinite}
+
+  /* 频谱条：贴在中央区最底部 */
+  #bars{
+    position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:3;
+    width:620px;height:52px;display:flex;align-items:flex-end;justify-content:center;
+    gap:4px;opacity:.55;transition:opacity .3s ease;
+  }
+  #bars.on{opacity:1}
+  #bars .b{
+    flex:1;height:100%;border-radius:4px 4px 2px 2px;transform-origin:bottom center;
+    transform:scaleY(.06);
+    background:linear-gradient(180deg,#a9e4ff 0%,#5cc8ff 45%,#3f7fd8 100%);
+    box-shadow:0 0 10px rgba(92,200,255,.45);
+    transition:background .5s ease;
+  }
+  body[data-state="sing"] #bars .b{background:linear-gradient(180deg,#d9c4ff 0%,#a98bff 46%,#6f5bd8 100%);
+    box-shadow:0 0 10px rgba(169,139,255,.5)}
+  body[data-state="speak"] #bars .b{background:linear-gradient(180deg,#c6f7ff 0%,#6fe0ff 46%,#3ea9d8 100%)}
+
+  /* 礼物飘心 */
+  #fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .heart{
+    position:absolute;font-size:34px;opacity:0;
+    animation:rise 1.9s ease-out forwards;
+    filter:drop-shadow(0 3px 8px rgba(255,90,150,.5));
+  }
+  @keyframes rise{
+    0%{opacity:0;transform:translateY(0) scale(.5)}
+    18%{opacity:1}
+    100%{opacity:0;transform:translateY(-190px) scale(1.25) rotate(14deg)}
+  }
+
+  /* ================= 右栏 ================= */
+  #right{position:absolute;right:40px;top:132px;width:452px;height:636px;
+         display:flex;flex-direction:column;gap:14px}
+
+  /* 正在播放 */
+  #np{padding:20px 22px 22px;border-radius:20px;
+    background:linear-gradient(180deg, rgba(24,54,100,.66), rgba(12,32,62,.72));
+    border:1px solid rgba(120,180,255,.22);
+    box-shadow:0 16px 40px rgba(2,10,26,.38), inset 0 1px 0 rgba(180,220,255,.1)}
+  #np .t{display:flex;align-items:center;gap:8px;font-size:15px;color:#bcd8f7;
+    letter-spacing:.06em;font-weight:700;margin-bottom:14px}
+  #np .t i{width:6px;height:6px;border-radius:50%;background:var(--pink);
+    box-shadow:0 0 10px var(--pink);font-style:normal;animation:pulse 1.5s ease-in-out infinite}
+  #np-title{font-size:34px;font-weight:800;line-height:1.24;color:#fff;
+    letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    text-shadow:0 4px 22px rgba(90,160,255,.3)}
+  #np-title.idle{font-size:23px;color:var(--dim);font-weight:700;text-shadow:none;white-space:normal;line-height:1.46}
+  #np-by{font-size:15px;color:var(--dim);margin-top:8px;height:20px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  #np-by b{color:#9fd4ff;font-weight:700}
+  #prog{margin-top:16px;height:8px;border-radius:999px;background:rgba(120,170,230,.16);
+    overflow:hidden;position:relative}
+  #prog-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,#4bb4ff,#8f7bff);
+    box-shadow:0 0 14px rgba(120,170,255,.7);
+    transition:width .28s linear}
+  #times{display:flex;justify-content:space-between;margin-top:9px;
+    font-size:14px;color:var(--dim2);font-variant-numeric:tabular-nums}
+
+  /* 队列 */
+  #qcard{padding:18px 22px 20px;border-radius:20px;flex:1;min-height:0;
+    display:flex;flex-direction:column;
+    background:linear-gradient(180deg, rgba(20,46,86,.58), rgba(11,28,54,.66));
+    border:1px solid var(--line);
+    box-shadow:0 14px 34px rgba(2,10,26,.32), inset 0 1px 0 rgba(180,220,255,.08)}
+  #qcard .t{font-size:15px;color:#bcd8f7;letter-spacing:.06em;font-weight:700;margin-bottom:12px;flex:none}
+  #qcard .t span{color:var(--dim2);font-weight:600;font-size:13px;margin-left:6px}
+  /* 队列：自动循环滚动（2026-10-28 改）
+     ------------------------------------------------------------
+     用户需求：队列长了以后，观众看不到自己的歌排第几。
+     原来的 overflow-y:auto 只能人工滚 —— 但直播画面没人去滚，
+     超出 8 首的部分等于永远看不到。
+
+     改成自动循环滚动：
+       · 内容超出视口高度时才滚（不足就不动，免得晃眼）
+       · 复制一份内容接在后面，滚完一份正好接上开头 → 无缝
+       · 速度约 32px/s，20 秒左右能看完全部
+       · 上下边缘做渐隐，进出不突兀 */
+  #qviewport{
+    flex:1;min-height:0;overflow:hidden;position:relative;
+    mask-image:linear-gradient(180deg, transparent 0, #000 12px,
+                               #000 calc(100% - 14px), transparent 100%);
+    -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 12px,
+                               #000 calc(100% - 14px), transparent 100%);
+  }
+  #qlist{display:flex;flex-direction:column;gap:9px;will-change:transform}
+  /* 每一组是完整的一份队列；滚动时两份首尾相接 */
+  .qgroup{display:flex;flex-direction:column;gap:9px}
+  @keyframes qscroll{
+    from{transform:translateY(0)}
+    to  {transform:translateY(calc(-1 * var(--qdist, 0px)))}
+  }
+  #qlist.rolling{animation:qscroll var(--qdur,24s) linear infinite}
+  .qi{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;
+    background:rgba(120,180,255,.07);border:1px solid rgba(120,180,255,.10);
+    animation:chipin .4s cubic-bezier(.2,1.3,.4,1)}
+  .qi .idx{width:23px;height:23px;flex:none;border-radius:7px;display:grid;place-items:center;
+    font-size:13px;font-weight:800;color:#0a1a30;
+    background:linear-gradient(180deg,#9fd8ff,#5cc8ff)}
+  .qi .nm{flex:1;min-width:0;font-size:17px;font-weight:700;color:#e9f5ff;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qi .who2{font-size:13px;color:var(--dim2);flex:none;max-width:96px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qi .tag{font-size:12px;padding:3px 9px;border-radius:999px;flex:none;font-weight:700;
+    color:#0a1a30;background:linear-gradient(180deg,#b6f0c8,#6fdc9a)}
+  .qi .tag.wait{background:rgba(140,180,230,.22);color:#a9c8ec}
+  /* 类型标记：原曲 / 翻唱 */
+  .qi .tagkind{font-size:11px;padding:3px 8px;border-radius:7px;flex:none;font-weight:800;
+    letter-spacing:.03em;color:#0a1a30;
+    background:linear-gradient(180deg,#d8cbff,#a98bff)}
+  .qi .tagkind.raw{background:linear-gradient(180deg,#ffd98a,#ffb43c)}
+
+  /* 点歌提示 */
+  #tip{
+    margin-top:2px;padding:15px 20px;border-radius:16px;text-align:center;
+    font-size:18px;font-weight:700;color:#ffe9b8;letter-spacing:.03em;
+    background:linear-gradient(180deg, rgba(255,190,80,.20), rgba(255,160,40,.14));
+    border:1px solid rgba(255,190,80,.38);
+    box-shadow:0 12px 30px rgba(60,30,0,.24), inset 0 1px 0 rgba(255,225,160,.22);
+  }
+  #tip b{color:#ffd98a}
+
+  /* ================= 底部：弹幕流 ================= */
+  #feedcard{
+    position:absolute;left:40px;top:792px;width:1188px;height:254px;
+    border-radius:20px;padding:16px 20px 14px;
+    background:linear-gradient(180deg, rgba(12,32,62,.56), rgba(8,22,44,.64));
+    border:1px solid var(--line);
+    box-shadow:0 16px 40px rgba(2,10,26,.34), inset 0 1px 0 rgba(180,220,255,.08);
+    overflow:hidden;
+  }
+  #feedcard .t{display:flex;align-items:center;gap:8px;font-size:14px;
+    color:#a9c8ec;letter-spacing:.08em;font-weight:700;margin-bottom:9px}
+  #feedcard .t i{width:6px;height:6px;border-radius:50%;background:#6fdc9a;
+    box-shadow:0 0 9px #6fdc9a;font-style:normal}
+  #feed{
+    height:196px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;
+    mask-image:linear-gradient(180deg, transparent 0%, #000 14%, #000 100%);
+    -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 14%, #000 100%);
+  }
+  /* 弹幕区宽，用两栏排布，同样的高度能多显示几条 */
+  #feed.cols2{display:grid;grid-template-columns:1fr 1fr;
+    grid-auto-rows:min-content;align-content:end;
+    column-gap:26px;row-gap:6px}
+  .fi{display:flex;align-items:center;gap:9px;font-size:19px;line-height:1.4;
+    animation:feedin .3s ease-out;flex:none}
+  @keyframes feedin{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  .fi .badge2{flex:none;font-size:12px;font-weight:800;padding:3px 8px;border-radius:7px;
+    letter-spacing:.04em;color:#0a1a30;background:linear-gradient(180deg,#a9d8ff,#6fb8ff)}
+  .fi .badge2.gift{background:linear-gradient(180deg,#ffd98a,#ffb43c)}
+  .fi .badge2.enter{background:linear-gradient(180deg,#c9d8ea,#93a9c4)}
+  .fi .badge2.follow{background:linear-gradient(180deg,#ffc2dc,#ff85b3)}
+  .fi .who3{flex:none;max-width:210px;font-weight:800;color:#9fd4ff;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fi .txt{flex:1;min-width:0;color:#dceafb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fi.gift .txt{color:#ffd98a;font-weight:700}
+  .fi.enter .txt,.fi.follow .txt{color:#a9c8ec}
+
+  /* 右下角声明 */
+  #foot{
+    position:absolute;right:40px;top:792px;width:452px;height:252px;
+    display:flex;flex-direction:column;justify-content:flex-end;gap:14px;
+  }
+  #disclaim{
+    font-size:13px;line-height:1.6;color:var(--dim2);
+    padding:14px 18px;border-radius:14px;
+    background:rgba(10,26,50,.5);border:1px solid rgba(120,180,255,.12);
+  }
+  #disclaim b{color:#9fd4ff;font-weight:700}
+  #shop{
+    display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:16px;
+    background:linear-gradient(180deg, rgba(30,66,116,.62), rgba(16,40,76,.7));
+    border:1px solid var(--line);
+  }
+  #shop .whale{font-size:26px;line-height:1}
+  #shop .col{display:flex;flex-direction:column;gap:3px;min-width:0}
+  #shop .k{font-size:13px;color:var(--dim2);letter-spacing:.06em}
+  #shop .v{font-size:16px;font-weight:700;color:#dcecff}
+</style>
+</head>
+<body data-state="idle">
+<div id="stage">
+  <div id="bg"></div>
+  <div id="grid"></div>
+  <div class="orb" id="o1"></div>
+  <div class="orb" id="o2"></div>
+  <div class="orb" id="o3"></div>
+  <div id="topglow"></div>
+
+  <!-- ===== 顶栏 ===== -->
+  <div id="head">
+    <div id="logo"><img src="/asset/front_cut.png" alt=""></div>
+    <div id="ttl">
+      <div id="tname">大肥鱼点歌直播间</div>
+      <div id="tsub">
+        <span id="live-dot" class="off"></span>
+        <span id="livetxt">未开播</span>
+        <span class="muted">·</span>
+        <span>弹幕点歌 · AI 虚拟主播</span>
+        <span id="tagline">WHALE LIVE</span>
+      </div>
+    </div>
+    <div id="pills">
+      <div class="pill"><div class="k">在线</div><div class="v" id="p-online">—</div></div>
+      <div class="pill"><div class="k">今日点歌</div><div class="v" id="p-songs">0</div></div>
+      <div class="pill"><div class="k">队列</div><div class="v" id="p-queue">0</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 左栏 ===== -->
+  <div id="left">
+    <div class="lcard">
+      <div class="t"><i></i>实时数据</div>
+      <div class="statrow"><span class="k">当前在线</span><span class="v big" id="s-online">—</span></div>
+      <div class="divider"></div>
+      <div class="statrow"><span class="k">累计观看</span><span class="v" id="s-total">—</span></div>
+      <div class="statrow"><span class="k">点赞</span><span class="v" id="s-likes">0</span></div>
+    </div>
+
+    <div class="lcard">
+      <div class="t"><i></i>今日礼物</div>
+      <div id="income"><span class="cur">¥</span><span class="num" id="s-income">0.00</span></div>
+      <div id="income-sub">礼物面值估算 · <span id="s-giftcount">0</span> 件</div>
+      <div class="divider"></div>
+      <div class="statrow"><span class="k">今日点歌</span><span class="v" id="s-songs" style="font-size:20px">0</span></div>
+    </div>
+
+    <div class="lcard">
+      <div class="t"><i></i>最近礼物</div>
+      <div id="gifts"><div class="empty">还没有收到礼物</div></div>
+      <div class="divider"></div>
+      <div class="statrow" style="padding:2px 0">
+        <span class="k">送礼人数</span><span class="v" id="s-gifters" style="font-size:19px">0</span>
+      </div>
+    </div>
+
+    <div class="lcard" id="hintcard">
+      <div class="t"><i></i>怎么玩</div>
+      <div id="howto">
+        <div class="ht"><b>点歌 晴天</b><span>AI 翻唱</span></div>
+        <div class="ht"><b>放 十年</b><span>放原曲</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 中间舞台 ===== -->
+  <div id="center">
+    <div id="fx"></div>
+    <div id="bubbles">
+      <div class="blane" id="laneL"></div>
+      <div class="blane" id="laneR"></div>
+    </div>
+
+    <div id="avatar-wrap">
+      <div id="halo"></div>
+      <img id="avatar" src="/asset/front_cut.png" alt="">
+      <!-- 视频皮套（即梦生成）。
+           ⚠️ 三段视频**各自一个 <video> 元素常驻**，同时循环播放，
+              切换时只改 CSS opacity（2026-10-28 改）。
+              为什么不用一个元素换 src：
+                换 src 会触发重新加载 → 有 0.5~2 秒黑屏/停帧，
+                而且 loop 从头开始，说话时人物会"跳回"待机姿势，很假。
+              三个常驻的好处：切换是纯粹的透明度交叉淡入，零加载延迟，
+              每段的播放进度各自独立，视觉上就是"她换了个动作"。 -->
+      <video id="vid-idle"  class="avid" muted loop playsinline preload="auto" src="/asset/clips_out/idle.webm"></video>
+      <video id="vid-speak" class="avid" muted loop playsinline preload="auto" src="/asset/clips_out/speak.webm"></video>
+      <video id="vid-sing"  class="avid" muted loop playsinline preload="auto" src="/asset/clips_out/sing.webm"></video>
+    </div>
+
+    <div id="status"><span class="sdot"></span><span id="status-txt">待机中</span></div>
+    <div id="bars"></div>
+  </div>
+
+  <!-- ===== 右栏 ===== -->
+  <div id="right">
+    <div id="np">
+      <div class="t"><i></i>正在播放</div>
+      <div id="np-title" class="idle">还没有人点歌</div>
+      <div id="np-by"></div>
+      <div id="prog"><div id="prog-fill"></div></div>
+      <div id="times"><span id="t-cur">0:00</span><span id="t-dur">0:00</span></div>
+    </div>
+
+    <div id="qcard">
+      <div class="t">接下来 · 点歌队列<span id="qcount"></span></div>
+      <div id="qviewport">
+        <div id="qlist"><div class="qgroup"><div class="empty">还没有人点歌，来点一首吧～</div></div></div>
+      </div>
+    </div>
+
+    <div id="tip">弹幕发送「<b>点歌 歌名</b>」即可点歌</div>
+  </div>
+
+  <!-- ===== 底部弹幕流 ===== -->
+  <div id="feedcard">
+    <div class="t"><i></i>弹幕</div>
+    <div id="feed" class="cols2"></div>
+  </div>
+
+  <!-- ===== 右下角 ===== -->
+  <div id="foot">
+    <div id="shop">
+      <div class="whale">🐋</div>
+      <div class="col">
+        <div class="k">今天的直播</div>
+        <div class="v" id="foot-line">大肥鱼在线上唱歌</div>
+      </div>
+    </div>
+    <div id="disclaim">
+      <b>AI 生成内容提示</b><br>
+      本直播间画面与语音由 AI 实时生成，非真人主播。
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   大肥鱼直播间场景
+   ------------------------------------------------------------
+   数据来源（同一个 WebSocket /ws）：
+     panel     10Hz 全量快照：live/stats/current/audio/queue/bubble
+     reply     气泡消息（服务端 say() 统一出口）
+     feed      弹幕流增量
+     motion    待机 / 说话 / 唱歌
+     gift_fx   礼物特效
+     live_status 开播状态
+   ============================================================ */
+const $ = id => document.getElementById(id);
+
+/* ---------- 等比缩放：设计稿 1920×1080 ---------- */
+const DESIGN_W = 1920, DESIGN_H = 1080;
+function fit() {
+  const s = Math.min(innerWidth / DESIGN_W, innerHeight / DESIGN_H);
+  const st = $('stage');
+  st.style.transform = `scale(${s})`;
+  // 视口比例和设计稿不同时（比如 OBS 源设成方形），居中留边
+  st.style.left = Math.max(0, (innerWidth - DESIGN_W * s) / 2) + 'px';
+  st.style.top = Math.max(0, (innerHeight - DESIGN_H * s) / 2) + 'px';
+}
+addEventListener('resize', fit);
+fit();
+
+/* ---------- 频谱条 ---------- */
+const BAR_N = 46;
+const barsEl = $('bars');
+const bars = [];
+const barSeed = [];
+for (let i = 0; i < BAR_N; i++) {
+  const d = document.createElement('div');
+  d.className = 'b';
+  barsEl.appendChild(d);
+  bars.push(d);
+  // 中间高两边低的钟形 + 各自的相位/速度，做出有机的跳动
+  const t = i / (BAR_N - 1);
+  const bell = 0.34 + 0.66 * Math.pow(Math.sin(Math.PI * t), 1.5);
+  barSeed.push({
+    base: bell,
+    phase: Math.random() * Math.PI * 2,
+    speed: 1.6 + Math.random() * 2.4,
+    wob: 0.35 + Math.random() * 0.4
+  });
+}
+
+let level = 0;           // 平滑后的电平
+let levelTarget = 0;
+let playingMusic = false;
+let playingVoice = false;
+
+function tickSpectrum(now) {
+  const t = now / 1000;
+  // 电平平滑：涨得快、落得慢，看着更像真实音频
+  level += (levelTarget - level) * (levelTarget > level ? 0.55 : 0.11);
+
+  // 音乐在播时给一个「有节奏的低频心跳」，别让安静段落看着像卡死
+  const beat = playingMusic ? 0.06 + 0.05 * Math.abs(Math.sin(t * 2.2)) : 0;
+  const energy = Math.max(level, beat);
+  const active = energy > 0.02;
+  barsEl.classList.toggle('on', active);
+
+  for (let i = 0; i < BAR_N; i++) {
+    const s = barSeed[i];
+    // 每个条自己的正弦包络
+    const w = 0.55 + 0.45 * Math.sin(t * s.speed + s.phase);
+    const wob = 0.75 + s.wob * 0.5 * Math.sin(t * (s.speed * 1.7) + s.phase * 2.1);
+    // 静音时留一点点呼吸感，别像死掉
+    const breath = 0.05 + 0.03 * Math.sin(t * 1.1 + s.phase * 0.6);
+    // 电平本身偏小（RMS 通常 0.05~0.3），放大到肉眼能看出跳动的范围
+    const h = Math.max(breath, s.base * Math.pow(energy, 0.62) * 1.9 * w * wob);
+    bars[i].style.transform = `scaleY(${Math.min(1, h).toFixed(3)})`;
+  }
+  requestAnimationFrame(tickSpectrum);
+}
+requestAnimationFrame(tickSpectrum);
+
+/* ---------- 气泡：左右漂浮（对话式） ----------
+   2026-10-28 改版，替换掉原来的「头顶单气泡、新消息顶掉旧消息」。
+
+   为什么改（用户原话）：人多的时候「那个皮套头顶的泡泡词换的太快了」。
+     旧做法只有一个气泡位，新消息一到就把上一条顶掉，观众来不及看完。
+
+   现在的规则：
+     · 每条消息 = 一枚独立气泡，左右两边交替出现
+     · 从皮套两侧由下往上慢慢飘，飘到顶就淡出消失
+     · 同一侧绝不重叠 —— 由 CSS flex 布局保证（见 .blane）
+     · 每侧最多 3 枚，超了让最老的那枚提前收掉
+
+   ⚠️ 两个关键设计（都是踩过坑才定下来的）：
+
+   1️⃣ 纵向堆叠交给 CSS flex，不用 JS 算位置。
+       早期用绝对定位 + 手算「该往上抬多少」，怎么算都会在边角情况下
+       重叠（缓动曲线、前后帧时间差、量高度的坐标系……任何一个没对齐就叠）。
+       换成 flex 的 column + justify-end 之后，浏览器自己保证不重叠，
+       JS 只需要管「往哪个泳道排」和「什么时候收掉」。
+
+   2️⃣ 动画必须 linear，速度必须恒定。
+       间距只有在速度一致时才能永久保持。早期按每条消息的 ms 单独定时长，
+       同侧快慢不一 —— 后面的追上前面、叠成一坨。
+       现在速度是常量，飘行时长由距离推出来，间距从生成那一刻起就固定了。
+*/
+const BUB_SPEED = 40;      // 上升速度(px/s) —— 用户要的就是「慢慢往上飘」
+const BUB_MAX_RISE = 470;  // 上升距离上限(px)
+const BUB_MIN_RISE = 150;  // 兜底下限：再挤也要让它飘一小段，别原地消失
+const BUB_MAX_SIDE = 3;    // 每侧最多同时几枚
+
+const LANES = { L: $('laneL'), R: $('laneR') };
+let bubNextSide = 'L';                     // 左右交替
+const BUB_LANES = { L: [], R: [] };        // 每侧正在飘的气泡（只为计数/清理）
+
+function retireBubble(rec, quick) {
+  const { el, side } = rec;
+  const lane = BUB_LANES[side];
+  const i = lane.indexOf(rec);
+  if (i >= 0) lane.splice(i, 1);
+  if (!el.parentNode) return;
+  if (el.dataset.dead === '1') return;   // animationend 和兜底定时器可能都来
+  el.dataset.dead = '1';
+
+  if (!quick) { el.remove(); return; }
+
+  // 提前收掉（该侧满了）：保留它此刻的浮动位置，只淡出。
+  // ⚠️ 先摘 .go 会让动画失效、气泡瞬间「弹」回底边，很难看 ——
+  //    所以用 currentTime 冻结动画，再淡出。
+  const anims = el.getAnimations ? el.getAnimations() : [];
+  anims.forEach(a => { try { a.pause(); } catch (e) {} });
+  el.style.transition = 'opacity .32s ease';
+  el.style.opacity = '0';
+  setTimeout(() => el.remove(), 360);
+}
+
+function showBubble(name, text, ms) {
+  if (!text) return;
+
+  const side = bubNextSide;
+  bubNextSide = side === 'L' ? 'R' : 'L';
+  const lane = BUB_LANES[side];
+  const host = LANES[side];
+
+  // 该侧满了 → 最早那枚提前收掉，新的才有位置往底下排
+  while (lane.length >= BUB_MAX_SIDE) retireBubble(lane[0], true);
+
+  const el = document.createElement('div');
+  el.className = 'bub ' + side;
+  if (name) {
+    const w = document.createElement('span');
+    w.className = 'who';
+    w.textContent = name;
+    el.appendChild(w);
+  }
+  const tx = document.createElement('span');
+  tx.textContent = text;
+  el.appendChild(tx);
+  // 新气泡插到最底下（flex 的 justify-end 会把它压在最下面）
+  host.appendChild(el);
+
+  // ⚠️ 平滑让位（2026-10-28）：
+  //    容器是「底部对齐」的 flex 列，直接 append 会让队伍瞬间长高 →
+  //    已在飘的气泡**啪地往上跳一截**，很难看。
+  //    办法：先让新气泡的负 margin 吃掉自己占的高度（队伍高度不变），
+  //    再用 margin 过渡把它「长」出来 —— 上面的气泡是被推上去的，不是跳上去的。
+  const h = el.offsetHeight || 70;
+  el.style.marginTop = -(h + 12) + 'px';
+  void el.offsetHeight;                     // 强制重排，让负 margin 先生效
+  el.style.transition = 'margin-top .42s cubic-bezier(.3,1,.4,1)';
+  el.style.marginTop = '12px';
+  setTimeout(() => { el.style.transition = ''; }, 520);
+
+  // 上升距离：统一飘满整个气泡容器（+自身高度，确保最后完全出画）。
+  //   所有气泡同速同距离 ⇒ 速度恒定，间距永远不会被后面的追上。
+  //   ⚠️ 不要按每枚气泡的剩余空间单独算（2026-10-28 试过）：
+  //      堆到第 3 枚时剩余空间只有几十像素，那条会「嗖」一下就没，
+  //      和旁边慢慢飘的完全不是一个节奏。宁可让它在顶部被裁掉 ——
+  //      顶部有 88px 的渐隐遮罩，视觉上是「淡出去」而不是「切断」。
+  const hostH = host.clientHeight || 437;
+  const avail = Math.min(BUB_MAX_RISE, hostH + h);
+  const dur = Math.round(avail / BUB_SPEED * 1000);
+
+  el.style.setProperty('--dur', dur + 'ms');
+  el.style.setProperty('--rise', avail + 'px');
+  // 往皮套外侧轻轻漂一点，像话飘散开（量很小，只为不呆板）
+  el.style.setProperty('--dx', (side === 'L' ? -6 : 6) + 'px');
+
+  const rec = { el, side, t0: performance.now() };
+  lane.push(rec);
+
+  // 下一帧起跑：先让浏览器完成布局，动画才会从 0% 开始播
+  requestAnimationFrame(() => el.classList.add('go'));
+
+  el.addEventListener('animationend', () => retireBubble(rec, false));
+  // 兜底：后台标签页里动画事件有时不触发，别让节点堆着
+  setTimeout(() => retireBubble(rec, false), dur + 1200);
+}
+
+/* 清空所有气泡（切场景 / 重连兜底用） */
+function clearBubbles() {
+  BUB_LANES.L.length = 0;
+  BUB_LANES.R.length = 0;
+  LANES.L.innerHTML = '';
+  LANES.R.innerHTML = '';
+  bubNextSide = 'L';
+}
+
+/* ---------- 视频皮套：按状态切视频 ----------
+   2026-10-28 接入即梦（Seedance）生成的循环素材。
+
+   素材来源：avatar/clips/*.mp4 → tools/make_avatar_clips.py 处理
+     · 自动找循环点（去掉即梦末尾的硬回弹）
+     · 抠绿幕 → 透明 webm
+   输出：avatar/clips_out/{idle,speak,sing}.webm
+
+   三段循环长度不同（idle 3.07s / speak 3.47s / sing 1.2s），
+   切换时会从 0 开始播 —— 观众看不出"接缝"，因为动作本身是连续的。
+
+   ⚠️ 关键设计：**三层兜底**
+     1. 视频加载成功 → 淡入视频，静态图淡出
+     2. 视频加载失败 / 超时 → 保持静态图 + 原有 CSS 动画，直播不断
+     3. OBS 里视频解码失败（比如编码不支持）→ 同样退回静态图
+   直播不能因为一个素材问题就黑屏。
+*/
+const AIMG = $('avatar');
+
+/* 三段视频元素（DOM 里常驻，见 HTML 注释为什么要这样） */
+const VIDS = {
+  idle:  $('vid-idle'),
+  speak: $('vid-speak'),
+  sing:  $('vid-sing'),
+};
+
+let vidOk = { idle: false, speak: false, sing: false };  // 哪几段真的能播
+let vidMode = '';                                        // 当前显示哪一段
+let vidEverShown = false;                                // 有没有成功显示过任何一段
+
+/* 视频不可用时，退回静态图 + CSS 动画（原有行为） */
+function fallbackToStatic() {
+  Object.values(VIDS).forEach(v => v && v.classList.remove('on'));
+  AIMG.classList.remove('vid-mode');
+  vidMode = '';
+}
+
+function setAvatarMode(mode) {
+  const want = (mode === 'sing' || mode === 'speak') ? mode : 'idle';
+  if (want === vidMode) return;           // 没变就别动（panel 每 100ms 推一次）
+
+  // 目标那段还没就绪 → 保持当前画面，别切换（切过去也是黑的）
+  if (!vidOk[want]) return;
+
+  vidMode = want;
+  vidEverShown = true;
+
+  // 交叉淡入：目标淡入、其余淡出。transition 在 CSS 里（.35s）
+  for (const [k, v] of Object.entries(VIDS)) {
+    if (!v) continue;
+    v.classList.toggle('on', k === want);
+    // 确保在播（切回来后要续上）
+    if (k === want && v.paused) v.play().catch(() => {});
+  }
+  AIMG.classList.add('vid-mode');
+}
+
+/* 每段视频各自就绪时，把它标记为可用 */
+for (const [k, v] of Object.entries(VIDS)) {
+  if (!v) continue;
+
+  v.addEventListener('canplaythrough', () => {
+    vidOk[k] = true;
+    // 首段就绪就直接顶上（不用等 panel 推送）
+    if (!vidEverShown) setAvatarMode('idle');
+  });
+
+  // 某些浏览器不触发 canplaythrough，canplay 也认
+  v.addEventListener('canplay', () => { vidOk[k] = true; });
+
+  v.addEventListener('error', () => {
+    vidOk[k] = false;
+    console.warn('[视频皮套] 加载失败:', k, v.currentSrc || '');
+    // 如果正在显示的就是这段，退回静态图
+    if (vidMode === k) fallbackToStatic();
+  });
+
+  // 主动开播（muted + playsinline，OBS 里允许自动播放）
+  v.play().catch(e => {
+    console.warn('[视频皮套] 自动播放被拒:', k, e.name);
+    vidOk[k] = false;
+  });
+}
+
+// 超时保护：10 秒还没有任何一段能播 → 静态图兜底（OBS 里卡住比没视频更糟）
+setTimeout(() => {
+  if (!vidEverShown) {
+    console.warn('[视频皮套] 10 秒内无可用视频，保持静态图');
+    fallbackToStatic();
+  }
+}, 10000);
+
+/* ---------- 弹幕流 ---------- */
+const FEED = $('feed');
+const FEED_MAX = 12;      // 两栏布局，一栏 6 条
+
+function addFeed(item, animate = true) {
+  if (!item) return;
+  const row = document.createElement('div');
+  row.className = 'fi ' + (item.type || 'chat');
+  if (!animate) row.style.animation = 'none';
+
+  if (item.type === 'gift') {
+    row.innerHTML = `<span class="badge2 gift">礼物</span>`;
+  } else if (item.type === 'enter') {
+    row.innerHTML = `<span class="badge2 enter">进场</span>`;
+  } else if (item.type === 'follow') {
+    row.innerHTML = `<span class="badge2 follow">关注</span>`;
+  } else {
+    row.innerHTML = `<span class="badge2">弹幕</span>`;
+  }
+  const who = document.createElement('span');
+  who.className = 'who3';
+  who.textContent = item.name || '';
+  const txt = document.createElement('span');
+  txt.className = 'txt';
+  txt.textContent = item.text || '';
+  row.appendChild(who);
+  row.appendChild(txt);
+
+  FEED.appendChild(row);
+  while (FEED.children.length > FEED_MAX) FEED.firstChild.remove();
+}
+
+/* ---------- 工具 ---------- */
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function num(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+/* 大数字缩写：12345 → 1.2万 */
+function shortNum(n) {
+  if (n === null || n === undefined) return '—';
+  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  return String(n);
+}
+function setText(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+
+/* ---------- 渲染整块面板 ---------- */
+let lastGiftNames = [];
+let lastQueueKey = '';
+
+/* ---------- 点歌队列：自动循环滚动（2026-10-28） ----------
+   为什么要有这个：队列长了以后 overflow-y:auto 只能人工滚，
+   但直播画面没人去滚，超出视口的部分观众永远看不到自己排第几。
+
+   做法：内容超出视口时，复制一份接在后面，动画滚完一份正好接上开头。
+   少于视口高度就不滚（否则画面一直在动，晃眼）。 */
+const Q_SPEED = 32;          // 滚动速度 px/s（约 20 秒看完 10 首）
+
+function buildQueue(qi) {
+  const box = $('qlist');
+  const vp = $('qviewport');
+
+  // 先彻底停掉旧动画，否则重建后会残留上一次的 --qdur/--qdist
+  // ⚠️ 不能写 box.style.animation = 'none'（2026-10-28 踩到）：
+  //    内联样式的优先级高于 CSS 类，写完这句之后
+  //    `.rolling` 类的 animation 就被永久覆盖了 —— 动画永远不跑。
+  //    正确做法是 removeProperty，把内联清掉，让类规则生效。
+  box.classList.remove('rolling');
+  box.style.removeProperty('animation');
+  void box.offsetHeight;                    // 强制重排，让取消动画生效
+  box.innerHTML = '';
+  box.style.removeProperty('--qdist');
+  box.style.removeProperty('--qdur');
+
+  const g = document.createElement('div');
+  g.className = 'qgroup';
+
+  if (!qi.length) {
+    g.innerHTML = '<div class="empty">还没有人点歌，来点一首吧～</div>';
+    box.appendChild(g);
+    return;
+  }
+
+  qi.forEach((it, i) => {
+    const d = document.createElement('div');
+    d.className = 'qi';
+    // 放原曲标「原曲」，点歌标「翻唱」；状态分「待播 / 准备中」
+    const kindTag = it.raw
+      ? '<span class="tagkind raw">原曲</span>'
+      : '<span class="tagkind">翻唱</span>';
+    const stTag = it.ready
+      ? '<span class="tag">待播</span>'
+      : '<span class="tag wait">准备中</span>';
+    d.innerHTML = `<span class="idx">${i + 1}</span>
+      <span class="nm"></span>
+      <span class="who2"></span>
+      ${kindTag}${stTag}`;
+    d.querySelector('.nm').textContent = it.kw || '';
+    d.querySelector('.who2').textContent = it.name || '';
+    g.appendChild(d);
+  });
+  box.appendChild(g);
+
+  // 量高度：超过视口才滚
+  const gh = g.offsetHeight;
+  const vh = vp.clientHeight;
+  if (gh <= vh + 4) return;                 // 放得下，不动
+
+  // 复制一份接在后面 → 滚完第一份正好接上第二份的开头，视觉无缝
+  const g2 = g.cloneNode(true);
+  g2.setAttribute('aria-hidden', 'true');
+  box.appendChild(g2);
+
+  // 滚动距离 = 一份内容高度 + 两组的间距（#qlist 的 gap 是 9px）
+  const dist = gh + 9;
+  const dur = Math.max(8, dist / Q_SPEED);
+  box.style.setProperty('--qdist', dist + 'px');
+  box.style.setProperty('--qdur', dur.toFixed(1) + 's');
+  requestAnimationFrame(() => box.classList.add('rolling'));
+}
+let lastFeedLen = 0;
+let lastFeedHead = '';
+
+function renderPanel(p) {
+  if (!p) return;
+  const live = p.live || {};
+  const au = p.audio || {};
+
+  /* 顶栏胶囊 */
+  // ⚠️ 区分「真的 0 人在线」和「抖音还没推数据」：
+  //    online_known=false → 显示「—」（不知道，别编数字）
+  //    online_known=true  → 就算 0 也显示「0」
+  const online = num(live.online);
+  const onlineTxt = live.online_known
+    ? shortNum(online || 0)
+    : (live.online_str || '—');
+  setText($('p-online'), onlineTxt);
+  setText($('p-songs'), String(live.gift_today || 0));
+  setText($('p-queue'), String(p.queue || 0));
+
+  /* 左栏数据 */
+  setText($('s-online'), onlineTxt);
+  setText($('s-total'), live.total_viewers_str || shortNum(num(live.total_viewers)));
+  setText($('s-likes'), shortNum(num(live.likes) || 0));
+  setText($('s-gifters'), String(live.gifters || 0));
+  setText($('s-giftcount'), String(live.gift_count || 0));
+  const inc = num(live.gift_value) || 0;
+  setText($('s-income'), inc.toFixed(2));
+  setText($('s-songs'), String(live.gift_today || 0));
+
+  /* 礼物 chips：只有变化时才重建，避免闪烁 */
+  const gn = live.gift_names || [];
+  const gkey = gn.join('|');
+  if (gkey !== (lastGiftNames.key || '')) {
+    lastGiftNames.key = gkey;
+    const box = $('gifts');
+    box.innerHTML = '';
+    if (!gn.length) {
+      box.innerHTML = '<div class="empty">还没有收到礼物</div>';
+    } else {
+      // 去重后按最近顺序展示
+      const seen = new Set();
+      gn.slice().reverse().forEach(g => {
+        if (!g || seen.has(g)) return;
+        seen.add(g);
+        const c = document.createElement('span');
+        c.className = 'gchip';
+        c.textContent = '🎁 ' + g;
+        box.appendChild(c);
+      });
+    }
+  }
+
+  /* 状态 */
+  const mode = p.mode || 'idle';
+  document.body.dataset.state = mode;
+  setAvatarMode(mode);
+  const singing = p.sing_q > 0 || p.play_q > 0;
+  let stxt = '待机中';
+  if (mode === 'sing') stxt = '演唱中';
+  else if (mode === 'speak') stxt = '说话中';
+  else if (singing) stxt = '翻唱排队中';
+  setText($('status-txt'), stxt);
+
+  /* 正在播放 */
+  const cur = p.current;
+  const npTitle = $('np-title');
+  if (cur && cur.title) {
+    npTitle.classList.remove('idle');
+    setText(npTitle, cur.title);
+    $('np-by').innerHTML = cur.by ? `点歌人：<b>${escapeHtml(cur.by)}</b>` : '大肥鱼为你演唱';
+  } else if (singing) {
+    npTitle.classList.add('idle');
+    setText(npTitle, '正在准备下一首…');
+    $('np-by').textContent = p.play_q > 0 ? '马上开播' : '翻唱进行中，请稍等';
+  } else {
+    npTitle.classList.add('idle');
+    setText(npTitle, '还没有人点歌');
+    $('np-by').textContent = '发「点歌 歌名」就能点歌哦';
+  }
+
+  /* 进度条：优先用服务端的真实播放位置 */
+  let pos = num(au.music_pos) || 0;
+  let dur = num(au.music_dur) || (cur && num(cur.dur)) || 0;
+  // 服务端 pos 是 10Hz 快照，两帧之间按已过时间做一点补偿，进度条才顺滑
+  if (au.music && dur > 0 && pos > 0) {
+    const dt = (performance.now() - lastPanelAt) / 1000;
+    pos = Math.min(dur, pos + Math.max(0, Math.min(dt, 0.35)));
+  }
+  const pct = dur > 0 ? Math.max(0, Math.min(100, pos / dur * 100)) : 0;
+  $('prog-fill').style.width = pct.toFixed(2) + '%';
+  setText($('t-cur'), fmtTime(pos));
+  setText($('t-dur'), fmtTime(dur));
+
+  /* 队列：顺序 = 真实播放顺序（下一个就播的最上面） */
+  const qi = p.queue_items || [];
+  // 后端返回**全部**队列，超出视口的部分靠自动循环滚动展示
+  const qkey = qi.map(x => x.kw + '@' + x.name + (x.ready ? '1' : '0') + (x.raw ? 'r' : 's')).join('|');
+  if (qkey !== lastQueueKey) {
+    lastQueueKey = qkey;
+    buildQueue(qi);
+    let qlabel = qi.length ? `（${qi.length}）` : '';
+    setText($('qcount'), qlabel);
+  }
+
+  /* 音频电平 → 频谱 */
+  levelTarget = Math.max(0, Math.min(1, num(au.level) || 0));
+  playingMusic = !!au.music;
+  playingVoice = !!au.voice;
+
+  /* 右下角文案 */
+  setText($('foot-line'),
+    mode === 'sing' ? '大肥鱼正在唱歌中' :
+    mode === 'speak' ? '大肥鱼正在和大家聊天' :
+    singing ? '正在准备下一首歌' : '大肥鱼在线上等你点歌');
+
+  lastPanelAt = performance.now();
+}
+let lastPanelAt = performance.now();
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+/* ---------- 礼物特效 ---------- */
+const FX = $('fx');
+function giftFx(name, gift, num2) {
+  const icons = ['💗', '💖', '✨', '🎁', '💫'];
+  const n = Math.min(10, 3 + Math.floor((num2 || 1) / 2));
+  for (let i = 0; i < n; i++) {
+    const h = document.createElement('div');
+    h.className = 'heart';
+    h.textContent = icons[Math.floor(Math.random() * icons.length)];
+    h.style.left = (22 + Math.random() * 56) + '%';
+    h.style.bottom = (18 + Math.random() * 22) + '%';
+    h.style.animationDelay = (i * 90) + 'ms';
+    h.style.fontSize = (26 + Math.random() * 20) + 'px';
+    FX.appendChild(h);
+    setTimeout(() => h.remove(), 2300);
+  }
+}
+
+/* ---------- WebSocket ---------- */
+let ws = null, retry = 0;
+let liveOnline = false;   // 抖音开播状态（由 live_status 事件更新）
+let wsUp = false;         // WebSocket 连接状态
+
+/* 顶栏那行小字要同时表达「连没连上」和「开没开播」，
+   优先级：直播中 > 已连接待开播 > 未开播 > 重连中 */
+function refreshLiveBadge() {
+  const dot = $('live-dot');
+  if (!wsUp) {
+    dot.classList.add('off');
+    setText($('livetxt'), '重连中…');
+    return;
+  }
+  if (liveOnline) {
+    dot.classList.remove('off');
+    setText($('livetxt'), '直播中');
+  } else {
+    dot.classList.add('off');
+    setText($('livetxt'), '未开播');
+  }
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    retry = 0;
+    wsUp = true;
+    refreshLiveBadge();
+  };
+
+  ws.onclose = () => {
+    wsUp = false;
+    refreshLiveBadge();
+    setTimeout(connect, Math.min(6000, 500 * ++retry));
+  };
+
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };
+
+  ws.onmessage = e => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+
+    switch (m.kind) {
+      case 'panel':
+        renderPanel(m);
+        break;
+
+      case 'hello':
+        if (m.panel) renderPanel(m.panel);
+        // 重连后恢复弹幕流
+        // ⚠️ 气泡**不恢复**（2026-10-28）：气泡现在是「飘上去就消失」的临时件，
+        //    重连时把服务端记着的最后一条重播一遍，等于让一句旧话
+        //    凭空再飘一次，观众会觉得莫名其妙。丢一条比重复一条好。
+        if (m.panel && m.panel.feed) {
+          FEED.innerHTML = '';
+          m.panel.feed.forEach(it => addFeed(it, false));
+        }
+        break;
+
+      case 'reply':
+        showBubble(m.name, m.text, m.ms);
+        break;
+
+      case 'feed':
+        addFeed(m.item);
+        break;
+
+      case 'motion':
+        document.body.dataset.state = m.state || 'idle';
+        break;
+
+      case 'gift_fx':
+        giftFx(m.name, m.gift, m.num);
+        break;
+
+      case 'live_status':
+        liveOnline = !!m.online;
+        refreshLiveBadge();
+        break;
+    }
+  };
+}
+connect();
+
+/* 心跳：OBS 长时间挂着时保活 */
+setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 25000);
+
+/* 首屏兜底：WS 还没连上时先用 /api/state 拉一次，避免空白 */
+(async () => {
+  try {
+    const d = await (await fetch('/api/state')).json();
+    renderPanel(d);
+    if (d.feed) d.feed.forEach(it => addFeed(it, false));
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

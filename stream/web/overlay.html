@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大肥鱼 · 字幕</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #b{max-width:92%;padding:16px 28px;border-radius:20px;
+     background:rgba(12,20,32,.86);color:#eaf3ff;
+     font:700 34px/1.45 "Microsoft YaHei","PingFang SC",sans-serif;
+     text-align:center;white-space:pre-wrap;word-break:break-word;
+     opacity:0;transform:translateY(10px);
+     transition:opacity .25s,transform .25s;
+     text-shadow:0 2px 8px rgba(0,0,0,.5)}
+  #b.on{opacity:1;transform:translateY(0)}
+  #n{color:#8fd0ff;font-size:26px;margin-right:10px}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="b"><span id="n"></span><span id="t"></span></div></div>
+<script>
+const B = document.getElementById('b'), N = document.getElementById('n'), T = document.getElementById('t');
+let timer, ws, retry = 0;
+
+function show(name, text, ms){
+  N.textContent = name ? name + '：' : '';
+  T.textContent = text || '';
+  B.classList.add('on');
+  clearTimeout(timer);
+  timer = setTimeout(() => B.classList.remove('on'), ms || 6000);
+}
+
+function connect(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => retry = 0;
+  ws.onclose = () => setTimeout(connect, Math.min(5000, 500*++retry));
+  ws.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.kind === 'reply') show(m.name, m.text, m.ms || 6000);
+    else if (m.kind === 'log') show('', m.msg, 4000);
+  };
+}
+connect();
+setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 25000);
+</script>
+</body>
+</html>

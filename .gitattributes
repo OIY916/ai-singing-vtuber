@@ -1,0 +1,10 @@
+# 统一换行，避免 Windows/Linux 协作时整文件 diff
+* text=auto
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.webm binary
+*.mp3 binary
+*.zip binary
+*.jar binary
