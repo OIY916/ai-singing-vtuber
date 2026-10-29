@@ -2,8 +2,6 @@
 
 一套可跑通的 **抖音 AI 唱歌 VTuber 直播链路**：观众在弹幕点歌 → 大模型判断是「点歌」还是「放原曲」→ RVC 用指定音色翻唱（或直接放原唱）→ 输出到虚拟声卡 → 直播伴侣推流；皮套、气泡、字幕由本地网页渲染，OBS 抓浏览器源即可。
 
-附带一个可选的 **Minecraft AI 分身**：mineflayer 机器人 + 大模型大脑，能在服务器里自己走动、挖矿、说话，并以第一人称视角投到直播画面角落。
-
 > 仅供个人娱乐 / 技术学习。翻唱音色模型与歌曲版权归各自权利人，公开使用请自行确认授权。
 
 ---
@@ -32,14 +30,6 @@ RVC 翻唱服务 cover_service.py (:8899, FastAPI)
                                   抖音直播间
 ```
 
-MC 分身（可选，与直播主链路解耦）：
-
-```
-MC 服务器 :25565 (RCON :25575) ← mineflayer bot (mc/bot) ← LLM 大脑 (brain.js)
-                                        └─ 皮肤资源包 HTTP :8088
-StreamCam 旁观者客户端 → OBS 第一人称画面
-```
-
 ---
 
 ## 二、目录结构
@@ -57,14 +47,6 @@ StreamCam 旁观者客户端 → OBS 第一人称画面
 │   ├── cover_service.py    FastAPI：/sing /speak /raw /health
 │   ├── netease_login_tool.py
 │   └── netease_cookie.example.json
-├── mc/                     Minecraft 分身（可选）
-│   ├── bot/                brain.js / bot.js / hud.js / watchdog.ps1
-│   ├── camera_driver.py    旁观者相机驱动
-│   ├── rcon.py             RCON 客户端
-│   ├── start_mc.ps1        一键起服务器 + 机器人 + 皮肤服务
-│   ├── cam_skin_pack/      相机皮肤资源包
-│   ├── http/               皮肤 zip（给服务器当资源包）
-│   └── server/server.properties.example
 ├── tools/                  控制台与各类调试脚本
 │   ├── control_panel.py    tkinter 控制台（切歌/暂停/点歌开关/语音开关/队列/黑名单）
 │   └── ...                 登录态抓取、RVC 批量测试、开播前自检等
@@ -85,10 +67,8 @@ StreamCam 旁观者客户端 → OBS 第一人称画面
 | 组件 | 说明 |
 |---|---|
 | Windows 10/11 | 音频走 WASAPI，控制台用 tkinter |
-| Python 3.10 | 直播主服务、控制台、MC 侧脚本 |
+| Python 3.10 | 直播主服务、控制台、工具脚本 |
 | RVC（RVCMAX / RVC-WebUI 变体） | **需单独下载**，体积几十 GB；`cover_service.py` 跑在它自带的 Python 环境里（自带 torch/ffmpeg） |
-| Node.js 18+ | 只有 MC 分身需要（mineflayer） |
-| Java 17/21 | 只有 MC 服务器需要 |
 | OBS Studio | 浏览器源抓皮套页 |
 | 抖音直播伴侣 | 推流 |
 | VB-Audio Virtual Cable | 把混音器输出喂给直播伴侣麦克风 |
@@ -104,12 +84,6 @@ StreamCam 旁观者客户端 → OBS 第一人称画面
 ```powershell
 python -m venv astrbot-venv          # 名字随意，脚本里默认用 astrbot-venv
 .\astrbot-venv\Scripts\pip install -r requirements.txt
-```
-
-MC 分身另需：
-
-```powershell
-cd mc\bot; npm install
 ```
 
 ### 2. 配置（都能从模板复制）
@@ -148,13 +122,12 @@ copy paths.example.json paths.json
 | `rvc_home` | RVC 安装根目录（其下应有 `RVC_Core\`、`Runtime\`） | 翻唱服务启动时直接报错并提示怎么配 |
 | `python` | 跑直播主服务的解释器 | 自动用项目内 `astrbot-venv` / `.venv`，再退回当前解释器 |
 | `music_dir` | 网易云下载目录（放 `.ncm`） | `ncmdump` 工具需自己传目录参数 |
-| `mc_dir` | `.minecraft` 目录（读客户端 jar 画物品栏） | `%APPDATA%\.minecraft` |
 | `douyin_live_exe` | 第三方弹幕采集器 exe | `<项目根>\tools_raw\douyinLive\douyinLive.exe` |
 
-也可以临时用环境变量覆盖：`DFY_RVC_HOME`、`DFY_PYTHON`、`DFY_MC_DIR`、`DFY_MUSIC_DIR`……
+也可以临时用环境变量覆盖：`DFY_RVC_HOME`、`DFY_PYTHON`、`DFY_MUSIC_DIR`、`DFY_DOUYIN_LIVE_EXE`……
 
 实现说明：
-- Python 侧统一走 `pathcfg.py`（`rvc_core()` / `ffmpeg()` / `python()` / `mc_dir()` …）；
+- Python 侧统一走 `pathcfg.py`（`rvc_core()` / `ffmpeg()` / `python()` / `music_dir()` …）；
 - PowerShell 侧每个脚本开头用 `Find-ProjectRoot` 从自身位置往上找 `stream\main.py` 定位项目根，
   所以脚本放在项目根、`scripts\live\` 或 `tools\` 下都能正常跑；
 - `ffmpeg` 优先用 RVC 自带的那份，取不到再退回系统 PATH。
@@ -237,13 +210,11 @@ RVC 侧：`GET /health`、`GET /models`、`POST /sing`、`POST /speak`、`POST /
 - GPU 单卡时 `/sing` 与 `/speak` 互斥；队列很长时说话要等翻唱空档。
 - 皮套是无口型同步的整段视频切换（idle / speak / sing），口型不对齐属于设计取舍。
 - `cover_service` 的网易云链路依赖登录态 cookie，过期需要重新导出。
-- MC 分身需要额外下载 MC 服务端、客户端与皮肤包，且吃显存，和 RVC 抢 GPU 时要留意。
 
 ---
 
 ## 八、致谢 / 第三方
 
 - [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 变声内核与 UVR5 人声分离
-- [mineflayer](https://github.com/PrismarineJS/mineflayer) MC 机器人框架
 - [aiohttp](https://github.com/aio-libs/aiohttp) / [FastAPI](https://github.com/tiangolo/fastapi) 服务框架
 - 网易云音乐相关接口、抖音直播弹幕采集由第三方工具提供，请遵守其服务条款

@@ -10,7 +10,6 @@
     pathcfg.rvc_home()      # RVC 安装根目录（含 RVC_Core / ffmpeg.exe）
     pathcfg.python()        # 跑直播主服务的解释器
     pathcfg.music_dir()     # 网易云下载目录（ncm 解密用）
-    pathcfg.mc_dir()        # .minecraft 目录（MC 客户端）
 
 设计说明：
    · 每个值都允许为空 —— 用不到 RVC 的人不该被迫填 RVC 路径；
@@ -27,7 +26,7 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 _CFG = None
-_KEYS = ("rvc_home", "python", "music_dir", "mc_dir", "douyin_live_exe", "node", "java")
+_KEYS = ("rvc_home", "python", "music_dir", "douyin_live_exe")
 
 
 def _load():
@@ -108,11 +107,6 @@ def python():
 def music_dir():
     """网易云音乐下载目录（放 .ncm 的地方）。"""
     return get("music_dir")
-
-
-def mc_dir():
-    """.minecraft 目录（MC 客户端皮肤/配置）。"""
-    return get("mc_dir")
 
 
 def as_dict():
