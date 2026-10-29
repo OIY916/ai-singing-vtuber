@@ -133,7 +133,15 @@ def check_douyin():
         return
 
     async def probe():
-        url = "ws://127.0.0.1:1088/ws/473385498459"
+        # 房间号从 config.json 读，不写死在仓库里
+        _rid = ""
+        try:
+            _cfg = _os.path.join(ROOT, "stream", "config.json")
+            with open(_cfg, encoding="utf-8") as _f:
+                _rid = (json.load(_f).get("room_id") or "").strip()
+        except Exception:
+            pass
+        url = ("ws://127.0.0.1:1088/ws/" + _rid) if _rid else "ws://127.0.0.1:1088/ws"
         async with websockets.connect(url, open_timeout=8) as ws:
             raw = await asyncio.wait_for(ws.recv(), timeout=15)
             return json.loads(raw)

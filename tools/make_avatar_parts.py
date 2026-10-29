@@ -6,7 +6,7 @@
   - mouth_open : 在嘴的位置画一个小椭圆嘴巴，按音量显隐/缩放
   - 眨眼       : 用两条肤色横条模拟眼睑，闭合时盖住眼睛
 
-输出到 E:\\qq-bot\\avatar\\
+输出到 <项目根>\avatar\
 """
 import os
 import sys
@@ -16,8 +16,12 @@ from PIL import Image, ImageFilter
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-SRC = r"E:\qq-bot\avatar\front_cut.png"
-OUT = r"E:\qq-bot\avatar"
+# --- 项目根自定位（本文件在 tools/ 下）---
+import os as _os
+PROJ_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# --------------------------------------
+SRC = _os.path.join(PROJ_ROOT, "avatar", "front_cut.png")
+OUT = _os.path.join(PROJ_ROOT, "avatar")
 
 # 实测坐标（front_cut.png 440x638）
 MOUTH = (203, 318)          # 嘴中心

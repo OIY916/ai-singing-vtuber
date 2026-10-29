@@ -4,14 +4,19 @@ import os
 import sys
 
 _args = sys.argv[1:]
-INPUT = _args[0] if len(_args) > 0 else r"E:\qq-bot\_research\mimo_sing_test.wav"
+INPUT = _args[0] if len(_args) > 0 else ""
 MODEL = _args[1] if len(_args) > 1 else ""   # 留空 = 用 weights 里第一个
-OUTPUT = _args[2] if len(_args) > 2 else r"E:\qq-bot\cover_service\test_out.wav"
+OUTPUT = _args[2] if len(_args) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_out.wav")
 F0UP = int(_args[3]) if len(_args) > 3 else 0
 F0METHOD = _args[4] if len(_args) > 4 else "rmvpe"
 sys.argv = [sys.argv[0]]
 
-RVC_ROOT = r"E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\RVCMAX_Nvidia_xiaoyuan\RVC_Core"
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(_HERE))
+import pathcfg
+RVC_ROOT = pathcfg.rvc_core()
+if not RVC_ROOT or not os.path.isdir(RVC_ROOT):
+    raise SystemExit("找不到 RVC_Core：请在项目根 paths.json 里填 rvc_home")
 os.chdir(RVC_ROOT)
 sys.path.insert(0, RVC_ROOT)
 
@@ -22,6 +27,8 @@ from scipy.io import wavfile
 from configs.config import Config
 from infer.modules.vc.modules import VC
 
+if not INPUT or not os.path.exists(INPUT):
+    raise SystemExit("用法: python test_vc.py <输入音频> [音色.pth] [输出.wav] [f0up] [method]")
 print("[test] in=%s model=%s f0up=%s method=%s" % (INPUT, MODEL, F0UP, F0METHOD))
 
 config = Config()

@@ -17,8 +17,14 @@ from scipy import ndimage
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-SRC = r"E:\qq-bot\大肥鱼参考图.jpg"
-OUT_DIR = r"E:\qq-bot\avatar"
+SRC = os.environ.get("AVATAR_SRC") or (sys.argv[1] if len(sys.argv) > 1 else "")
+if not SRC or not os.path.exists(SRC):
+    sys.exit("请指定参考图：python tools/make_avatar.py <参考图.png>  或设置环境变量 AVATAR_SRC")
+# --- 项目根自定位（本文件在 tools/ 下）---
+import os as _os
+PROJ_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# --------------------------------------
+OUT_DIR = _os.path.join(PROJ_ROOT, "avatar")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # 三视图的切割边界（实测得出）

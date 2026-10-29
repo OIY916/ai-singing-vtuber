@@ -3,7 +3,7 @@
 网易云登录器（持久化 profile）
 - 弹出可见的浏览器窗口，用户手动登录
 - 登录成功后自动保存 cookie 到 netease_cookie.json
-- profile 永久保存在 E:\qq-bot\netease_profile，之后 cookie 一直有效
+- profile 永久保存在 <项目根>\netease_profile，之后 cookie 一直有效
 """
 import json
 import os

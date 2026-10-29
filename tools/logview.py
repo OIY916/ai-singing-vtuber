@@ -30,7 +30,11 @@ from datetime import datetime
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-LOG_DIR = r"E:\qq-bot\logs"
+# --- 项目根自定位（本文件在 tools/ 下）---
+import os as _os
+PROJ_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# --------------------------------------
+LOG_DIR = _os.path.join(PROJ_ROOT, "logs")
 
 # 这些是关键事件类别，按直播复盘价值排序
 IMPORTANT = ("点歌", "点歌拒", "识别", "翻唱开始", "翻唱完成", "RVC重试",

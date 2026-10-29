@@ -11,6 +11,10 @@
 import sys
 import time
 
+# --- 项目根自定位（本文件在 tools/ 下）---
+import os as _os
+PROJ_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# --------------------------------------
 sys.path.insert(0, _os.path.join(PROJ_ROOT, "stream"))
 sys.stdout.reconfigure(encoding="utf-8")
 

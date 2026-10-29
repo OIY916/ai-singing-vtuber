@@ -18,9 +18,13 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from playwright.sync_api import sync_playwright
 
+# --- 项目根自定位（本文件在 tools/ 下）---
+import os as _os
+PROJ_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# --------------------------------------
 PROFILE_DIR = os.environ.get("DOUYIN_PROFILE_DIR", _os.path.join(PROJ_ROOT, "douyin_profile"))
 COOKIE_OUT = os.environ.get("DOUYIN_COOKIE_OUT", _os.path.join(PROJ_ROOT, "tools_raw", "douyin_cookie.txt"))
-CHROME = os.environ.get("PLAYWRIGHT_CHROME", r"C:\Users\Administrator\AppData\Local\ms-playwright\chromium-1228\chrome-win64\chrome.exe")
+CHROME = os.environ.get("PLAYWRIGHT_CHROME", "")   # 留空 = 用 playwright 自带的浏览器
 
 # 抖音 cookie 里这几个是关键字段
 KEY_FIELDS = ("ttwid", "sessionid", "sid_guard", "uid_tt", "passport_csrf_token", "s_v_web_id", "msToken")
