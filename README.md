@@ -9,15 +9,26 @@
 
 ## 一、仓库里有什么 / 没什么
 
-| ✅ 包含 | ❌ 不包含（需自备，见「三」） |
-|---|---|
-| 直播主服务（弹幕→队列→播放→气泡） | RVC 整合包（几十 GB） |
-| RVC 翻唱服务（搜索→分离→变声→混音） | RVC 音色模型 `.pth` |
-| tkinter 控制台 + 开播自检 | 音乐平台账号 / 登录态 cookie |
-| 皮套页面（idle / speak / sing 三段视频） | 抖音弹幕采集器 `douyinLive` |
-| 本地观众记忆（SQLite） | 大模型 / TTS 的 API Key |
-| 路径配置（`paths.json`，不写死盘符） | OBS、直播伴侣、虚拟声卡 |
-| 网易云 `.ncm` 解密、模型管理等工具 | 歌曲版权 |
+**✅ 仓库包含**
+
+- 直播主服务（弹幕 → 队列 → 播放 → 气泡）
+- RVC 翻唱服务（搜索 → 人声分离 → 变声 → 混音）
+- tkinter 控制台 + 开播前自检脚本
+- 皮套页面（idle / speak / sing 三段视频 + 气泡 + 频谱）
+- 本地观众记忆（SQLite）
+- **ncm 解密工具（免安装 zip，见「八」）**
+- 路径配置 `paths.json`（不写死盘符，换机器只改一处）
+- 运维工具：日志查看、音频诊断、OBS 自动配置、皮套素材生成、模型整理
+
+**❌ 需要自备（清单见「三」）**
+
+- RVC 整合包（几十 GB）
+- RVC 音色模型 `.pth`（本仓库不附带，请自备并确认有权使用）
+- 音乐平台账号 / 登录态 cookie
+- 抖音弹幕采集器 `douyinLive`（第三方）
+- 大模型 / TTS 的 API Key（任意 OpenAI 兼容服务）
+- OBS Studio、抖音直播伴侣、VB-Audio Virtual Cable
+- 歌曲版权（翻唱与传播请遵守当地法规）
 
 ---
 
@@ -177,7 +188,32 @@ python tools\prelive_check.py
 
 ---
 
-## 八、常用操作
+## 八、附赠工具：ncm 解密
+
+音乐平台下载的 `.ncm` 是加密格式，普通播放器/ffmpeg 打不开，需要先解密成 mp3/flac。
+
+仓库里的 **`tools/ncm妙妙工具.zip`** 就是打包好的免安装版：
+
+1. 解压到任意目录（**路径别含中文以外的特殊符号**）
+2. 把 `.ncm` 文件**直接拖到 `解密ncm-拖到这里.bat` 上**
+3. 同目录会生成解密后的 `mp3` / `flac`
+
+它自动找 Python（优先级：环境变量 `RVC_PY` → 旁边的 `Runtime\python.exe` → 系统 `python`），
+所以装了 RVC 整合包或普通 Python 都能直接跑。
+
+也可以命令行用仓库里的裸脚本：
+
+```powershell
+python tools
+cmdump_standalone.py 你的音乐目录 -o 输出目录
+```
+
+> 该工具基于开源项目 [ncmdump](https://github.com/nondanee/ncmdump) 的思路实现，
+> 仅用于解密你自己合法获取的音乐文件。
+
+---
+
+## 九、常用操作
 
 | 需求 | 做法 |
 |---|---|
@@ -191,7 +227,7 @@ python tools\prelive_check.py
 
 ---
 
-## 九、已知限制
+## 十、已知限制
 
 - 只有 Windows 路径/音频实现（WASAPI + tkinter 控制台）。
 - RVC 单卡时 `/sing` 与 `/speak` 共用一把 GPU 锁：唱歌流程中默认不说话；
@@ -202,7 +238,7 @@ python tools\prelive_check.py
 
 ---
 
-## 十、第三方与版权
+## 十一、第三方与版权
 
 - [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)（变声内核、UVR5、rmvpe）
 - [FastAPI](https://github.com/tiangolo/fastapi) / [aiohttp](https://github.com/aio-libs/aiohttp)
