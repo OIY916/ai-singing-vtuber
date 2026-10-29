@@ -91,7 +91,6 @@ python -m venv astrbot-venv          # 名字随意，脚本里默认用 astrbot
 ```powershell
 copy stream\config.example.json            stream\config.json
 copy cover_service\netease_cookie.example.json cover_service\netease_cookie.json
-copy mc\server\server.properties.example   mc\server\server.properties
 copy paths.example.json                    paths.json
 ```
 
@@ -106,8 +105,6 @@ copy paths.example.json                    paths.json
 | `cover_api` | RVC 服务地址，默认 `http://127.0.0.1:8899` |
 
 `Cover_service/netease_cookie.json` 需要你自己登录网易云后导出（可用 `netease_login_tool.py`）。
-
-`mc/server/server.properties` 里的 `rcon.password` 改成你自己的。
 
 ### 3. 配置本机路径（paths.json）
 
