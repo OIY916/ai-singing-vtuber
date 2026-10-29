@@ -2,8 +2,15 @@
 """把皮肤资源包写进 server.properties（进服自动下发）。"""
 import re
 
-SHA = open(r"E:\qq-bot\mc\http\sha1.txt", encoding="utf-8").read().strip()
-P = r"E:\qq-bot\mc\server\server.properties"
+# --- 路径自定位（自动生成）：本文件在 mc\ 下 ---
+import os as _os
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+MC_ROOT = HERE
+PROJ_ROOT = _os.path.dirname(HERE)
+# --- 自定位结束 ---
+
+SHA = open(_os.path.join(MC_ROOT, "http", "sha1.txt"), encoding="utf-8").read().strip()
+P = _os.path.join(MC_ROOT, "server", "server.properties")
 
 KV = {
     "resource-pack": "http://127.0.0.1:8088/dfy_skin.zip",

@@ -1,8 +1,9 @@
-# Supervise the MC bot: restart it whenever it exits (OOM / crash).
+﻿# Supervise the MC bot: restart it whenever it exits (OOM / crash).
 # ASCII only on purpose (PS5 misreads UTF-8 without BOM).
 # 2026-10-29: idempotent - check port 3008 before spawning, so we never
 # end up with two bots (both connect as BigFatFish -> server kicks one).
-$root = "E:\qq-bot\mc"
+# 不写死盘符：本脚本在 mc\bot\ 下，$root 自动指向 mc\
+$root = Split-Path -Parent $PSScriptRoot
 $env:MC_VERSION = "1.20.1"
 while ($true) {
   $busy = Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue

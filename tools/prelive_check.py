@@ -12,8 +12,17 @@ import json
 import sys
 import urllib.request
 
+# --- 路径自定位（自动生成，勿手改）：工具在 tools/ 下，项目根是上一层 ---
+import os as _os
+import sys as _sys
+ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path.insert(0, ROOT)
+import pathcfg
+PYPATH = pathcfg.python()
+# --- 路径自定位结束 ---
+
 sys.stdout.reconfigure(encoding="utf-8")
-sys.path.insert(0, r"E:\qq-bot\stream")
+sys.path.insert(0, _os.path.join(ROOT, "stream"))
 
 BASE = "http://127.0.0.1:8790"
 RESULTS = []
@@ -66,7 +75,7 @@ def check_rvc():
         models = d.get("models") or []
         add("ok", "RVC /health", f"模型 {len(models)} 个")
         import os
-        cfg = os.path.join(r"E:\qq-bot\stream", "config.json")
+        cfg = os.path.join(ROOT, "stream", "config.json")
         c = json.load(open(cfg, encoding="utf-8"))
         for key, label in (("tts_model", "说话"), ("sing_model", "唱歌")):
             m = c.get(key)
@@ -88,7 +97,7 @@ def check_audio():
         # 混音器优先级是 WASAPI > DirectSound > 其他，实际用的是 37。
         # 之前这里报 [12] MME，跟真实链路不符，容易误导排查。
         import sys as _sys
-        _sys.path.insert(0, r"E:\qq-bot\stream")
+        _sys.path.insert(0, _os.path.join(ROOT, "stream"))
         from mixer import Mixer
         found = Mixer.find_device()
         if found:

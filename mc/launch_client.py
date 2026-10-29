@@ -19,6 +19,13 @@ import subprocess
 import sys
 import uuid as uuidlib
 
+# --- 路径自定位（自动生成）：本文件在 mc\ 下 ---
+import os as _os
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+MC_ROOT = HERE
+PROJ_ROOT = _os.path.dirname(HERE)
+# --- 自定位结束 ---
+
 MC = r"E:\game\MC\.minecraft"
 VERSION = "1.20.1"
 JAVA = r"E:\java\java17\bin\javaw.exe"

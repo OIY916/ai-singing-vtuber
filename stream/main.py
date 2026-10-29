@@ -30,8 +30,11 @@ import websockets
 from aiohttp import web
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 项目根目录（stream/ 的上一层）：用来读 paths.json 之类的本机配置
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from applog import get_logger, log_error, log_event, setup_logging
 import memory
+import pathcfg                      # 本机路径配置（RVC 目录 / ffmpeg 等）
 from mixer import Mixer
 
 # ⚠️ 尽早初始化日志：必须在任何 print/traceback 之前，
@@ -544,7 +547,9 @@ def decode_mp3(data):
     if isinstance(data, str):
         with open(data, "rb") as f:
             data = f.read()
-    ffmpeg = r"E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\RVCMAX_Nvidia_xiaoyuan\RVC_Core\ffmpeg.exe"
+    # ⚠️ 不写死盘符：优先用 RVC 自带的 ffmpeg（paths.json 的 rvc_home），
+    #    没有就退回系统 PATH 里的 ffmpeg。
+    ffmpeg = pathcfg.ffmpeg()
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
         f.write(data)
         tmp = f.name

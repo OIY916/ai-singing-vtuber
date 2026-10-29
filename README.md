@@ -93,6 +93,7 @@ StreamCam 旁观者客户端 → OBS 第一人称画面
 | 抖音直播伴侣 | 推流 |
 | VB-Audio Virtual Cable | 把混音器输出喂给直播伴侣麦克风 |
 | 网易云音乐账号 | 翻唱要搜歌/下载，需要登录态 cookie |
+| 抖音弹幕采集器 `douyinLive` | **第三方，不随仓库分发**；放进 `tools_raw\douyinLive\` 或用 `paths.json` 指定 |
 
 ---
 
@@ -117,6 +118,7 @@ cd mc\bot; npm install
 copy stream\config.example.json            stream\config.json
 copy cover_service\netease_cookie.example.json cover_service\netease_cookie.json
 copy mc\server\server.properties.example   mc\server\server.properties
+copy paths.example.json                    paths.json
 ```
 
 `stream/config.json` 里**必须填**：
@@ -133,26 +135,29 @@ copy mc\server\server.properties.example   mc\server\server.properties
 
 `mc/server/server.properties` 里的 `rcon.password` 改成你自己的。
 
-### 3. 改掉硬编码路径
+### 3. 配置本机路径（paths.json）
 
-代码里目前写死了这些本机路径，换机器必须改：
-
-| 路径 | 出现位置 |
-|---|---|
-| `E:\qq-bot\...` | 大部分启动脚本、`*.ps1`、`tools/*.py` |
-| `E:\qq-bot\astrbot-venv\Scripts\python.exe` | 启动脚本里指定解释器 |
-| `E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\...` | `cover_service.py`（RVC 根目录、`ffmpeg.exe`） |
-| `D:\CloudMusic` | 网易云下载目录 |
-
-一次性替换：
+代码里**不再写死盘符**，所有本机路径集中在一个文件（不进仓库）：
 
 ```powershell
-# 示例：把旧根目录换成本机路径（先确认再执行）
-Get-ChildItem -Recurse -Include *.py,*.ps1,*.bat | ForEach-Object {
-    (Get-Content $_.FullName -Raw) -replace 'E:\\qq-bot', 'C:\\你的路径\\qq-bot' |
-        Set-Content $_.FullName -NoNewline
-}
+copy paths.example.json paths.json
 ```
+
+| 键 | 含义 | 不填时的默认行为 |
+|---|---|---|
+| `rvc_home` | RVC 安装根目录（其下应有 `RVC_Core\`、`Runtime\`） | 翻唱服务启动时直接报错并提示怎么配 |
+| `python` | 跑直播主服务的解释器 | 自动用项目内 `astrbot-venv` / `.venv`，再退回当前解释器 |
+| `music_dir` | 网易云下载目录（放 `.ncm`） | `ncmdump` 工具需自己传目录参数 |
+| `mc_dir` | `.minecraft` 目录（读客户端 jar 画物品栏） | `%APPDATA%\.minecraft` |
+| `douyin_live_exe` | 第三方弹幕采集器 exe | `<项目根>\tools_raw\douyinLive\douyinLive.exe` |
+
+也可以临时用环境变量覆盖：`DFY_RVC_HOME`、`DFY_PYTHON`、`DFY_MC_DIR`、`DFY_MUSIC_DIR`……
+
+实现说明：
+- Python 侧统一走 `pathcfg.py`（`rvc_core()` / `ffmpeg()` / `python()` / `mc_dir()` …）；
+- PowerShell 侧每个脚本开头用 `Find-ProjectRoot` 从自身位置往上找 `stream\main.py` 定位项目根，
+  所以脚本放在项目根、`scripts\live\` 或 `tools\` 下都能正常跑；
+- `ffmpeg` 优先用 RVC 自带的那份，取不到再退回系统 PATH。
 
 ### 4. 起服务
 
@@ -225,7 +230,10 @@ RVC 侧：`GET /health`、`GET /models`、`POST /sing`、`POST /speak`、`POST /
 
 ## 七、已知限制
 
-- 本机绝对路径写死在源码与脚本里（见「部署步骤 3」），尚未参数化。
+- 第三方弹幕采集器 `douyinLive` 不随本仓库分发，需要自己准备并放进 `tools_raw\douyinLive\`，
+  或在 `paths.json` 里用 `douyin_live_exe` 指到任意位置（抖音弹幕协议本身会变，建议用较新的版本）。
+- 本机路径已集中到 `paths.json`（见「部署步骤 3」），但少数**调试脚本**（`tools/rvc_batch_test.py`、
+  `tools/rvc_ab_test.py`、`tools/ncmdump_standalone.py` 等）里仍留有示例路径，属于一次性实验脚本，按需自己改。
 - GPU 单卡时 `/sing` 与 `/speak` 互斥；队列很长时说话要等翻唱空档。
 - 皮套是无口型同步的整段视频切换（idle / speak / sing），口型不对齐属于设计取舍。
 - `cover_service` 的网易云链路依赖登录态 cookie，过期需要重新导出。

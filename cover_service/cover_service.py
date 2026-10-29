@@ -3,8 +3,8 @@
 本地 RVC 翻唱服务（HTTP API）
 流程：输入歌曲 -> UVR5 人声分离 -> RVC 音色转换 -> 与原伴奏混音 -> 返回 mp3
 
-启动（用 RVC 自带 runtime）：
-  E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\RVCMAX_Nvidia_xiaoyuan\Runtime\python.exe cover_service.py
+启动（用 RVC 自带 runtime，路径见项目根 paths.json 的 rvc_home）：
+  <rvc_home>\Runtime\python.exe cover_service.py
 
 接口：
   GET  /health                     健康检查
@@ -22,8 +22,20 @@ import time
 import traceback
 import uuid
 
-RVC_ROOT = r"E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\RVCMAX_Nvidia_xiaoyuan\RVC_Core"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# ⚠️ 不写死盘符：RVC 装在哪由项目根目录 paths.json 的 rvc_home
+#    （或环境变量 DFY_RVC_HOME）决定。本服务跑在 RVC 自带的 Python 里，
+#    所以要把项目根加进 sys.path 才能 import pathcfg。
+sys.path.insert(0, os.path.dirname(BASE_DIR))
+import pathcfg
+
+RVC_ROOT = pathcfg.rvc_core()
+if not RVC_ROOT or not os.path.isdir(RVC_ROOT):
+    raise SystemExit(
+        "找不到 RVC_Core 目录。\n"
+        "请在项目根目录的 paths.json 里填 rvc_home，或设置环境变量 DFY_RVC_HOME，\n"
+        "指向 RVCMAX 安装根目录（其下应有 RVC_Core/ 和 Runtime/）。\n"
+        "当前解析结果: %r" % (RVC_ROOT,))
 WORK_DIR = os.path.join(BASE_DIR, "work")
 OUT_DIR = os.path.join(BASE_DIR, "output")
 os.makedirs(WORK_DIR, exist_ok=True)
@@ -1025,8 +1037,31 @@ import base64
 import json
 import urllib.request
 
-# ⚠️ 密钥不进仓库：从环境变量读，或在本地 config 里配置
-MIMO_KEY = os.environ.get("MIMO_KEY", "")
+
+def _load_mimo_key() -> str:
+    """读取 MiMo TTS 的 Key —— ⚠️ 绝不写进源码（仓库里只留这段读取逻辑）。
+
+    优先级：
+      1. 环境变量 MIMO_KEY
+      2. cover_service/local_secrets.json 里的 mimo_key（本地文件，已被 .gitignore 忽略）
+    两者都没有时返回空串，/speak 会给出明确报错而不是莫名其妙地出声失败。
+    """
+    k = (os.environ.get("MIMO_KEY") or "").strip()
+    if k:
+        return k
+    for name in ("local_secrets.json", "secrets.json"):
+        p = os.path.join(BASE_DIR, name)
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                return str(json.load(f).get("mimo_key") or "").strip()
+        except Exception as e:
+            print(f"[cover] 读取 {name} 失败（忽略）: {e}")
+    return ""
+
+
+MIMO_KEY = _load_mimo_key()
 MIMO_URL = "https://api.xiaomimimo.com/v1/chat/completions"
 DEFAULT_SPEAK_MODEL = "youzhanv2-xi.pth"
 DEFAULT_TTS_VOICE = "冰糖"
@@ -1046,6 +1081,11 @@ def _mimo_tts(text: str, voice: str = DEFAULT_TTS_VOICE) -> bytes:
     注意：MiMo TTS 要求 messages 里同时有 user（语气指令）和 assistant（要读的文本），
     只传 assistant 会返回 400。
     """
+    if not MIMO_KEY:
+        raise RuntimeError(
+            "没有配置 MiMo TTS 的 Key：请设置环境变量 MIMO_KEY，"
+            "或把 {\"mimo_key\": \"...\"} 写进 cover_service/local_secrets.json"
+            "（该文件已被 .gitignore 忽略，不会进仓库）")
     body = json.dumps(
         {
             "model": "mimo-v2.5-tts",

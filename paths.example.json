@@ -1,0 +1,12 @@
+{
+  "_说明": "复制成 paths.json 后按本机情况填写；不填的项会用代码里的智能默认值。详见 README「路径配置」一节。",
+
+  "rvc_home": "C:/path/to/RVCMAX_Nvidia_xiaoyuan/RVCMAX_Nvidia_xiaoyuan",
+  "python": "",
+  "music_dir": "",
+  "mc_dir": "",
+  "douyin_live_exe": "",
+
+  "node": "",
+  "java": ""
+}

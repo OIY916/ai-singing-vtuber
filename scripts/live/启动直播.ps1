@@ -22,7 +22,29 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Root = "E:\qq-bot"
+
+# ⚠️ 不写死盘符：从脚本位置往上找项目根（认 stream\main.py 当标记文件），
+#    所以这个脚本放在项目根、或 scripts\live\ 下都能正常用。
+function Find-ProjectRoot([string]$start) {
+    $d = $start
+    for ($i = 0; $i -lt 4 -and $d; $i++) {
+        if (Test-Path (Join-Path $d "stream\main.py")) { return $d }
+        $d = Split-Path -Parent $d
+    }
+    return $start
+}
+$Root = Find-ProjectRoot $PSScriptRoot
+
+# 本机路径配置：项目根的 paths.json（不进仓库，模板见 paths.example.json）
+$PathsFile = Join-Path $Root "paths.json"
+$Paths = if (Test-Path $PathsFile) { Get-Content $PathsFile -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
+
+# RVC 安装根目录（其下应有 Runtime\python.exe 和 RVC_Core\）
+$RvcHome = if ($Paths -and $Paths.rvc_home) { $Paths.rvc_home } elseif ($env:DFY_RVC_HOME) { $env:DFY_RVC_HOME } else { "" }
+# 跑直播主服务的解释器：paths.json > 项目内 venv > 系统 python
+$Py = if ($Paths -and $Paths.python -and (Test-Path $Paths.python)) { $Paths.python }
+      elseif (Test-Path (Join-Path $Root "astrbot-venv\Scripts\python.exe")) { Join-Path $Root "astrbot-venv\Scripts\python.exe" }
+      else { "python" }
 
 function Get-PortPid([int]$Port) {
     $c = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
@@ -154,7 +176,7 @@ Write-Host @"
 #    结果主服务和 RVC 的 print() 全部消失，排查「连唱卡住」时只能靠猜，
 #    还多次把旧日志当新日志，得出过错误结论。
 #    现在强制重定向到 logs\ 下，按「哪天 / 哪个服务」分开。
-$LogDir = "E:\qq-bot\logs"
+$LogDir = Join-Path $Root "logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 $Day = Get-Date -Format "yyyy-MM-dd"
 
@@ -168,9 +190,19 @@ if (Get-PortPid 1088) {
 } else {
     Write-Host "[1/3] 启动弹幕采集 (douyinLive :1088)…"
     # douyinLive 自己会写 run.log，这里额外捕获它的控制台输出
-    Start-Process "E:\qq-bot\tools_raw\douyinLive\douyinLive.exe" `
-        -ArgumentList "--config", "E:\qq-bot\tools_raw\douyinLive\config.yaml" `
-        -WorkingDirectory "E:\qq-bot\tools_raw\douyinLive" `
+    # douyinLive 是第三方弹幕采集器，不随本仓库分发（见 README「第三方依赖」）。
+    # 默认放在 <项目根>\tools_raw\douyinLive\ 下，也可用 paths.json 的 douyin_live_exe 指到别处。
+    $DouyinDir = if ($Paths -and $Paths.douyin_live_exe) { Split-Path -Parent $Paths.douyin_live_exe }
+                 else { Join-Path $Root "tools_raw\douyinLive" }
+    $DouyinExe = if ($Paths -and $Paths.douyin_live_exe) { $Paths.douyin_live_exe }
+                 else { Join-Path $DouyinDir "douyinLive.exe" }
+    if (-not (Test-Path $DouyinExe)) {
+        Write-Host "  ⚠️ 找不到弹幕采集器：$DouyinExe" -ForegroundColor Yellow
+        Write-Host "     若已装到别处，请在 paths.json 里填 douyin_live_exe" -ForegroundColor DarkGray
+    }
+    Start-Process $DouyinExe `
+        -ArgumentList "--config", (Join-Path $DouyinDir "config.yaml") `
+        -WorkingDirectory $DouyinDir `
         -RedirectStandardOutput "$LogDir\douyin-$Day-$Stamp.log" `
         -RedirectStandardError "$LogDir\douyin-$Day-$Stamp.err.log"
     if (-not (Wait-Port 1088 30 "弹幕采集")) {
@@ -185,9 +217,19 @@ if (Get-PortPid 8899) {
     Write-Host "[2/3] 启动 RVC 翻唱服务 (:8899)…（首次加载模型较慢，请耐心等）"
     $env:PYTHONIOENCODING = "utf-8"
     $env:PYTHONUTF8 = "1"
-    Start-Process "E:\RVC-bsq\RVCMAX_Nvidia_xiaoyuan\RVCMAX_Nvidia_xiaoyuan\Runtime\python.exe" `
-        -ArgumentList "-u", "E:\qq-bot\cover_service\cover_service.py" `
-        -WorkingDirectory "E:\qq-bot\cover_service" `
+    if (-not $RvcHome) {
+        Write-Host "  ⚠️ 没有配置 RVC 路径：请在项目根 paths.json 里填 rvc_home" -ForegroundColor Red
+        Write-Host "     （或设环境变量 DFY_RVC_HOME，模板见 paths.example.json）" -ForegroundColor DarkGray
+        exit 1
+    }
+    $RvcPy = Join-Path $RvcHome "Runtime\python.exe"
+    if (-not (Test-Path $RvcPy)) {
+        Write-Host "  ⚠️ 找不到 RVC 解释器：$RvcPy" -ForegroundColor Red
+        exit 1
+    }
+    Start-Process $RvcPy `
+        -ArgumentList "-u", (Join-Path $Root "cover_service\cover_service.py") `
+        -WorkingDirectory (Join-Path $Root "cover_service") `
         -RedirectStandardOutput "$LogDir\rvc-$Day-$Stamp.log" `
         -RedirectStandardError "$LogDir\rvc-$Day-$Stamp.err.log"
     Wait-Port 8899 120 "RVC 翻唱" | Out-Null
@@ -209,9 +251,9 @@ if (Get-PortPid 8790) {
     $env:PYTHONUTF8 = "1"
     # 主服务自己会 tee 到 logs\main-<date>.log，这里再兜一层进程级输出，
     # 万一 Python 层还没起来就崩了（比如 venv 坏了），也能留证据
-    Start-Process "E:\qq-bot\astrbot-venv\Scripts\python.exe" `
-        -ArgumentList "-u", "E:\qq-bot\stream\main.py" `
-        -WorkingDirectory "E:\qq-bot" `
+    Start-Process $Py `
+        -ArgumentList "-u", (Join-Path $Root "stream\main.py") `
+        -WorkingDirectory $Root `
         -RedirectStandardOutput "$LogDir\main-stdout-$Day-$Stamp.log" `
         -RedirectStandardError "$LogDir\main-stderr-$Day-$Stamp.log"
     Wait-Port 8790 30 "直播主服务" | Out-Null
@@ -234,7 +276,7 @@ Write-Host @"
   看最新事件：  Get-Content (Get-ChildItem "$LogDir\events-*.log" | Sort-Object LastWriteTime | Select-Object -Last 1)
 
 开播前自测（不需要真实观众）：
-  E:\qq-bot\astrbot-venv\Scripts\python.exe E:\qq-bot\tools\test_panel_data.py
+  $Py $Root\tools\test_panel_data.py
 
 提醒：
   · OBS「皮套」源应为 1920×1080，URL = http://127.0.0.1:8790/avatar

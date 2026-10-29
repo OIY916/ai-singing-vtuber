@@ -14,9 +14,18 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from playwright.sync_api import sync_playwright
 
-PROFILE_DIR = r"E:\qq-bot\netease_profile"
-COOKIE_OUT = r"E:\qq-bot\cover_service\netease_cookie.json"
-CHROME = r"C:\Users\Administrator\AppData\Local\ms-playwright\chromium-1228\chrome-win64\chrome.exe"
+# --- 路径自定位（自动生成，勿手改）：工具在 tools/ 下，项目根是上一层 ---
+import os as _os
+import sys as _sys
+ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path.insert(0, ROOT)
+import pathcfg
+PYPATH = pathcfg.python()
+# --- 路径自定位结束 ---
+
+PROFILE_DIR = _os.path.join(ROOT, "netease_profile")
+COOKIE_OUT = _os.path.join(ROOT, "cover_service", "netease_cookie.json")
+CHROME = _os.environ.get("PLAYWRIGHT_CHROME", "")   # 留空则用 playwright 自带的浏览器
 
 os.makedirs(PROFILE_DIR, exist_ok=True)
 

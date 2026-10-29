@@ -4,7 +4,18 @@ const fs = require('fs')
 const path = require('path')
 const AdmZip = require('adm-zip')
 
-const MC_DIR = 'E:\\game\\MC\\.minecraft'
+// ⚠️ 不写死盘符：优先环境变量 MC_DIR，其次项目根 paths.json 的 mc_dir，
+//    最后退回 %APPDATA%\.minecraft（官方启动器/大多数启动器的默认位置）。
+const REPO_ROOT = path.join(__dirname, '..', '..')
+let _mcDir = process.env.MC_DIR || process.env.DFY_MC_DIR || ''
+if (!_mcDir) {
+  try {
+    _mcDir = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'paths.json'), 'utf8')).mc_dir || ''
+  } catch (e) {
+    // 没有 paths.json 就靠默认值，交给下面兜底
+  }
+}
+const MC_DIR = _mcDir || path.join(process.env.APPDATA || '', '.minecraft')
 const VERSION = process.env.MC_VERSION || '1.20.1'
 const JAR = path.join(MC_DIR, 'versions', VERSION, VERSION + '.jar')
 const ASSET_INDEX = '5'

@@ -6,9 +6,16 @@ import os
 import shutil
 import zipfile
 
+# --- 路径自定位（自动生成）：本文件在 mc\ 下 ---
+import os as _os
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+MC_ROOT = HERE
+PROJ_ROOT = _os.path.dirname(HERE)
+# --- 自定位结束 ---
+
 SRC = r"E:\game\MC\皮肤\大肥鱼.png"
-BUILD = r"E:\qq-bot\mc\cam_skin_pack"
-OUT = r"E:\qq-bot\mc\http"
+BUILD = _os.path.join(MC_ROOT, "cam_skin_pack")
+OUT = _os.path.join(MC_ROOT, "http")
 
 if os.path.isdir(BUILD):
     shutil.rmtree(BUILD)

@@ -17,9 +17,16 @@ import os
 import shutil
 import sys
 
+# --- 路径自定位（自动生成）：本文件在 mc\ 下 ---
+import os as _os
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+MC_ROOT = HERE
+PROJ_ROOT = _os.path.dirname(HERE)
+# --- 自定位结束 ---
+
 BOT = "BigFatFish"
 CAM = "FishCam"
-SERVER = r"E:\qq-bot\mc\server"
+SERVER = _os.path.join(MC_ROOT, "server")
 PACK_NAME = "cam_follow"
 
 # datapack pack_format

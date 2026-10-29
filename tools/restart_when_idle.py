@@ -21,9 +21,18 @@ import sys
 import time
 import urllib.request
 
+# --- 路径自定位（自动生成，勿手改）：工具在 tools/ 下，项目根是上一层 ---
+import os as _os
+import sys as _sys
+ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path.insert(0, ROOT)
+import pathcfg
+PYPATH = pathcfg.python()
+# --- 路径自定位结束 ---
+
 sys.stdout.reconfigure(encoding="utf-8")
 BASE = "http://127.0.0.1:8790"
-LOG_DIR = r"E:\qq-bot\logs"
+LOG_DIR = _os.path.join(ROOT, "logs")
 
 
 def state():
@@ -96,9 +105,9 @@ def main():
     err = open(rf"{LOG_DIR}\main-stderr-restart-{stamp}.log", "w",
                encoding="utf-8")
     p = subprocess.Popen(
-        [r"E:\qq-bot\astrbot-venv\Scripts\python.exe", "-u",
-         r"E:\qq-bot\stream\main.py"],
-        cwd=r"E:\qq-bot", stdout=out, stderr=err,
+        [PYPATH, "-u",
+         _os.path.join(ROOT, "stream", "main.py")],
+        cwd=ROOT, stdout=out, stderr=err,
         creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
     )
     print(f"已启动，PID={p.pid}，日志: main-stdout-restart-{stamp}.log")
